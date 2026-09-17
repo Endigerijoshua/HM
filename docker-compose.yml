@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      TCIVIC_DATABASE_URL: sqlite:////app/data/temporal_civic.db
+      TCIVIC_SEED_ON_STARTUP: "true"
+      TCIVIC_CORS_ORIGINS: "http://localhost:5173,http://localhost:8080"
+    volumes:
+      - civic-data:/app/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  civic-data:
