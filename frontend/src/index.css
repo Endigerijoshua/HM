@@ -469,3 +469,165 @@ body {
   border-radius: 0 8px 8px 0;
   line-height: 1.5;
 }
+
+/* ---- P6 responsibility graph ---- */
+.resp-graph-card {
+  margin-top: 16px;
+}
+
+.resp-graph-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.resp-graph-head h3 {
+  margin: 0 0 4px;
+}
+
+.resp-graph-status {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.resp-graph-chain {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.resp-graph-step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.resp-graph-node {
+  flex: 0 1 auto;
+  max-width: 190px;
+  min-width: 120px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: 0 1px 2px rgba(27, 42, 51, 0.05);
+}
+
+.resp-graph-node-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.resp-graph-node-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.resp-graph-node-location {
+  border-top: 3px solid #64748b;
+}
+
+.resp-graph-node-jurisdiction {
+  border-top: 3px solid #0f766e;
+}
+
+.resp-graph-node-authority {
+  border-top: 3px solid #1d4ed8;
+}
+
+.resp-graph-node-department {
+  border-top: 3px solid #7c3aed;
+}
+
+.resp-graph-node-service {
+  border-top: 3px solid #b45309;
+}
+
+.resp-graph-node-issue {
+  border-top: 3px solid #0f172a;
+}
+
+.resp-graph-node-escalation {
+  border-top: 3px solid #be123c;
+}
+
+.resp-graph-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  min-width: 64px;
+}
+
+.resp-graph-arrow-line {
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  position: relative;
+}
+
+.resp-graph-arrow-line::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -3px;
+  border-left: 6px solid var(--border);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.resp-graph-arrow-type {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .resp-graph-chain {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resp-graph-step {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resp-graph-node {
+    width: 100%;
+    max-width: none;
+  }
+
+  .resp-graph-arrow {
+    min-width: 0;
+    padding: 4px 0 4px 16px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .resp-graph-arrow-line {
+    width: 18px;
+    height: 2px;
+  }
+}

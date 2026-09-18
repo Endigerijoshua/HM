@@ -320,6 +320,41 @@ routing rules and complaints stay read-only.
 
 ---
 
+## Responsibility graph (P6)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/graph/resolve?lat=..&lng=..&issue_type=..&date=..` | Explanatory responsibility chain for one point + issue + date |
+
+The graph is a **deterministic projection of the P2 routing decision**, not a
+source of truth and not an alternative route engine. Resolving reuses
+`ResponsibilityRoutingService.resolve()` and renders the decision as a chain:
+
+`Location → Jurisdiction → Authority → Department → Service → Issue → Escalation`
+
+Nodes carry stable ids (`location:..`, `jurisdiction:..`, `authority:..`,
+`department:..`, `service:..`, `issue:..`, `escalation:..`) and edges use only
+four types: `RESPONSIBLE_FOR`, `MANAGED_BY`, `HANDLED_BY`, `ESCALATES_TO`.
+Every node/edge has a human-readable label so the graph reads without the DB.
+
+Partial chains appear when responsibility cannot be settled:
+
+- `RESPONSIBILITY_UNRESOLVED` — the chain stops at the jurisdiction: the
+  construction-waste rules tie at equal priority, so no authority, department
+  or service node is emitted and the jurisdiction links straight to the issue
+  with a `RESPONSIBLE_FOR` edge.
+- `NO_JURISDICTION` — only the `LOCATION` and `ISSUE` nodes remain, linked by a
+  `RESPONSIBLE_FOR` edge (e.g. `street_light` at C-1004).
+
+The response also echoes the routing status, the P2 audit id (`routing_id`),
+the matched rule id, and a sentence explaining the chain (e.g. *"Location is
+inside V.V. Mohalla (W-05) on 2024-06-01 (By DELIM-2024). …"*). Each resolve
+still writes a P2 audit row. The frontend shows the graph as a CSS/SVG-free
+flow in the "Why this route? · Responsibility Graph" section of Citizen
+Routing — no graph database or graph rendering library is involved.
+
+---
+
 ## Security posture (P0 baseline)
 
 - Config via environment (`TCIVIC_*`) — no hard-coded secrets; `TCIVIC_ADMIN_TOKEN` is empty by default.
@@ -361,5 +396,9 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   jurisdiction-vs-routing mismatches (authority, department, service, temporal rule
   conflicts and responsibility gaps) persisted with severities and an OPEN/UNDER_REVIEW/
   RESOLVED/DISMISSED status, plus a read API.
-  (Conflict review workflow, applying migrations, responsibility graph,
-  admin boundary management remain future.)
+- **P6** (done): responsibility graph — deterministic explanatory chain
+  Location → Jurisdiction → Authority → Department → Service → Issue → Escalation for any
+  point + issue + date, built from the P2 routing decision (no duplicated routing logic)
+  and rendered as a simple flow on Citizen Routing.
+  (Conflict review workflow, applying migrations, admin boundary management
+  remain future.)

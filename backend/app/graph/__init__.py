@@ -1,0 +1,1 @@
+"""Responsibility graph (P6)."""

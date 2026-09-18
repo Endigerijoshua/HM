@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, fetchAreas, fetchJurisdictions, fetchRoads } from "../api";
-import { fetchIssueTypes, fetchRoutingRules, resolveRoute } from "../api/routing";
 import type { AreaSummary, JurisdictionSummary, RoadSummary } from "../api/gisTypes";
+import { resolveGraph } from "../api/graph";
+import type { GraphResolveResponse } from "../api/graphTypes";
+import { fetchIssueTypes, fetchRoutingRules, resolveRoute } from "../api/routing";
 import type {
   IssueTypeSummary,
   RoutingResult,
   RoutingRuleSummary,
   RoutingStatus,
 } from "../api/routingTypes";
+import { ResponsibilityGraph } from "../components/graph/ResponsibilityGraph";
 import { JurisdictionMap } from "../components/map/JurisdictionMap";
 
 const MIN_DATE = "2020-01-01";
@@ -74,6 +77,8 @@ export default function CitizenRoutingPage() {
   const [result, setResult] = useState<RoutingResult | null>(null);
   const [resultError, setResultError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [graph, setGraph] = useState<GraphResolveResponse | null>(null);
+  const [graphError, setGraphError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +179,8 @@ export default function CitizenRoutingPage() {
       setResolving(true);
       setResultError(null);
       setResult(null);
+      setGraphError(null);
+      setGraph(null);
       resolveRoute({ lat, lng, issue_type: issue, date })
         .then((res) => {
           setProbe({ lat: res.latitude, lng: res.longitude });
@@ -183,6 +190,11 @@ export default function CitizenRoutingPage() {
           setResultError(error instanceof ApiError ? error.message : "Unknown error"),
         )
         .finally(() => setResolving(false));
+      resolveGraph({ lat, lng, issue_type: issue, date })
+        .then(setGraph)
+        .catch((error: unknown) =>
+          setGraphError(error instanceof ApiError ? error.message : "Unknown error"),
+        );
     },
     [],
   );
@@ -300,6 +312,30 @@ export default function CitizenRoutingPage() {
           {!resolving && !resultError && result && <RoutingResultView result={result} />}
         </div>
       </div>
+
+      {graphError && <p className="error-text">{graphError}</p>}
+      {graph && (
+        <div className="card resp-graph-card">
+          <div className="resp-graph-head">
+            <h3>Why this route? · Responsibility Graph</h3>
+            {graph.routing_id !== null && (
+              <span className="muted">Routing audit #{graph.routing_id}</span>
+            )}
+          </div>
+          <p className="resp-graph-status">
+            Routing status:{" "}
+            <span
+              className={`result-status ${
+                (STATUS_TONE as Record<string, string>)[graph.status] ?? "muted-tag"
+              }`}
+            >
+              {graph.status}
+            </span>
+          </p>
+          <p className="why-route">{graph.explanation}</p>
+          <ResponsibilityGraph data={graph} />
+        </div>
+      )}
 
       {rules.length > 0 && (
         <div className="card rules-card">

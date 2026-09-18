@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers.conflicts import router as conflicts_router
 from app.api.routers.gis import router as gis_router
+from app.api.routers.graph import router as graph_router
 from app.api.routers.health import router as health_router
 from app.api.routers.routing import router as routing_router
 from app.api.routers.whatif import router as whatif_router
@@ -71,3 +72,4 @@ app.include_router(gis_router, prefix=settings.api_v1_prefix)
 app.include_router(routing_router, prefix=settings.api_v1_prefix)
 app.include_router(whatif_router, prefix=settings.api_v1_prefix)
 app.include_router(conflicts_router, prefix=settings.api_v1_prefix)
+app.include_router(graph_router, prefix=settings.api_v1_prefix)
