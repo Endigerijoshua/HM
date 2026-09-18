@@ -8,6 +8,8 @@ from app.db.models.audit import AuditLog
 from app.db.models.base_mixins import TemporalMixin, TimestampMixin
 from app.db.models.complaints import Complaint, ComplaintEvent
 from app.db.models.conflicts import ResponsibilityConflict
+from app.db.models.escalation import EscalationStep
+from app.db.models.issue_types import IssueType
 from app.db.models.jurisdiction import (
     Area,
     Jurisdiction,
@@ -28,6 +30,8 @@ __all__ = [
     "Complaint",
     "ComplaintEvent",
     "Department",
+    "EscalationStep",
+    "IssueType",
     "Jurisdiction",
     "JurisdictionChange",
     "JurisdictionVersion",

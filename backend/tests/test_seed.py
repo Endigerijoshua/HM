@@ -14,6 +14,8 @@ from app.db.models import (
     Complaint,
     ComplaintEvent,
     Department,
+    EscalationStep,
+    IssueType,
     Jurisdiction,
     JurisdictionChange,
     JurisdictionVersion,
@@ -33,13 +35,15 @@ def test_seed_counts(db) -> None:
     assert db.query(Authority).count() == 5
     assert db.query(Department).count() == 10
     assert db.query(Service).count() == 13
+    assert db.query(IssueType).count() == 23
+    assert db.query(EscalationStep).count() == 3
     assert db.query(JurisdictionVersion).count() == 3
     assert db.query(Jurisdiction).count() == 21  # 9 wards + corridor (V1); 9 wards + corridor + heritage (V2)
     assert db.query(JurisdictionChange).count() >= 3
     assert db.query(Ward).count() == 9
     assert db.query(Area).count() == 3
     assert db.query(Road).count() == 4
-    assert db.query(RoutingRule).count() == 14
+    assert db.query(RoutingRule).count() == 25
     assert db.query(Complaint).count() == 9
     assert db.query(ComplaintEvent).count() == 9
     assert db.query(ResponsibilityConflict).count() == 1

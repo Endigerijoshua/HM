@@ -13,6 +13,7 @@ from app.gis.base import GeometryNotAvailableError
 from app.gis.ops import GisService
 from app.gis.shapely_provider import ShapelyGeometryProvider
 from app.gis.temporal_engine import TemporalJurisdictionEngine
+from app.routing.routing_service import ResponsibilityRoutingService
 
 
 def get_db() -> Iterator[Session]:
@@ -44,6 +45,15 @@ def get_temporal_engine(
 ) -> TemporalJurisdictionEngine:
     """Wire the temporal jurisdiction resolution engine."""
     return TemporalJurisdictionEngine(provider)
+
+
+def get_routing_service(
+    db: Session = Depends(get_db),
+    provider: ShapelyGeometryProvider = Depends(get_geometry_provider),
+    engine: TemporalJurisdictionEngine = Depends(get_temporal_engine),
+) -> ResponsibilityRoutingService:
+    """Wire the civic responsibility routing service (P2)."""
+    return ResponsibilityRoutingService(db, engine, provider)
 
 
 def require_admin(request: Request) -> None:

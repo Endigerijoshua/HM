@@ -28,3 +28,19 @@ export type {
   RoadSummary,
   WardRef,
 } from "./gisTypes";
+export {
+  fetchIssueTypes,
+  fetchRoutingRules,
+  resolveRoute,
+} from "./routing";
+export type { RoutingRuleListParams } from "./routing";
+export type {
+  ActorRef,
+  EscalationStepRef,
+  IssueTypeListResponse,
+  IssueTypeSummary,
+  RoutingResult,
+  RoutingRuleListResponse,
+  RoutingRuleSummary,
+  RoutingStatus,
+} from "./routingTypes";

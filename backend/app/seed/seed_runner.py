@@ -23,6 +23,8 @@ from app.db.models import (
     Complaint,
     ComplaintEvent,
     Department,
+    EscalationStep,
+    IssueType,
     Jurisdiction,
     JurisdictionChange,
     JurisdictionVersion,
@@ -118,10 +120,61 @@ JURISDICTION_VERSION_DEFS = [
     ),
 ]
 
-# Demo uses service codes as issue-type codes (1:1 - see routing_rules model).
+# Issue-type catalogue: citizen-facing taxonomy plus legacy codes kept routable
+# so already-reported complaints remain answerable.
+ISSUE_TYPE_DEFS = [
+    # (code, name, category, description)
+    ("garbage", "Garbage / solid waste", "sanitation",
+     "Uncollected or overflowing household and domestic garbage."),
+    ("garbage_collection", "Garbage Collection (legacy code)", "sanitation",
+     "Legacy issue code kept routable for historical complaints."),
+    ("overflowing_bin", "Overflowing public bin", "sanitation",
+     "Public waste bin that needs emptying."),
+    ("illegal_dumping", "Illegal dumping of waste", "sanitation",
+     "Waste dumped on roads, public land or empty lots."),
+    ("street_sweeping", "Street Sweeping (legacy code)", "sanitation",
+     "Legacy issue code for street sweeping."),
+    ("public_toilet", "Public Toilet (legacy code)", "sanitation",
+     "Legacy issue code for public toilet maintenance."),
+    ("pothole", "Pothole on city road", "roads",
+     "A crater or pothole on a city/collector road."),
+    ("road_repair", "Road Repair (legacy code)", "roads",
+     "Legacy issue code for city road repair."),
+    ("road_damage", "Road surface damage", "roads",
+     "Cracked, sunken or otherwise damaged road surface."),
+    ("drain_cleaning", "Drain Cleaning (legacy code)", "roads",
+     "Legacy issue code for storm-water drain cleaning."),
+    ("drainage", "Blocked storm-water drain", "roads",
+     "Storm-water drain blocked with silt or debris."),
+    ("water_supply", "Water supply interruption", "water",
+     "Low pressure or no water from the public supply."),
+    ("sewage", "Sewage leak / overflow", "water",
+     "Raw sewage leaking from a manhole or line."),
+    ("sewage_overflow", "Sewage Overflow (legacy code)", "water",
+     "Legacy issue code for sewage overflow."),
+    ("streetlight", "Street light not working", "lighting",
+     "A public street light that is dark, flickering or damaged."),
+    ("street_light", "Street Light (legacy code)", "lighting",
+     "Legacy issue code for street lighting faults."),
+    ("heritage_maintenance", "Heritage zone maintenance", "heritage",
+     "Maintenance issues inside a protected heritage precinct."),
+    ("layout_approval", "Layout approval inquiry", "planning",
+     "Questions on layout and land approval procedures."),
+    ("sh_repair", "State Highway Repair", "highways",
+     "Damage on a state highway stretch."),
+    ("nh_repair", "National Highway Repair", "highways",
+     "Damage on a national highway corridor."),
+    ("power_outage", "Electricity outage", "utility",
+     "Loss of supply or failed street-power infrastructure."),
+    ("construction_waste", "Construction waste on public land", "construction",
+     "Construction debris dumped on public land or blocking access."),
+    ("public_property_damage", "Public property damage", "public_property",
+     "Vandalism or damage to parks, benches, signage or civic assets."),
+]
+
+# Rule columns: (code, issue_type, dept, service, scope, jurisdiction_code,
+#                priority, eff_from, eff_to, rationale)
 RULE_DEFS = [
-    # (code, issue_type, dept, service, scope, jurisdiction_code, priority,
-    #  eff_from, eff_to, rationale)
     ("RULE-GARBAGE-PRE2024", "garbage_collection", "MCC-D-HS", "SVC-GARBAGE", "AUTHORITY_WIDE", None, 1,
      date(2020, 1, 1), date(2023, 12, 31),
      "Historical pre-2024 collection routing; expired by the 2024 delimitation."),
@@ -154,6 +207,61 @@ RULE_DEFS = [
      date(2024, 4, 1), None,
      "National highway issues route to NHAI nationwide - even when the point "
      "sits geographically inside an MCC ward (used by the conflict demo)."),
+]
+
+# P2: citizen-facing taxonomy rules (authority-wide), historical variant and a
+# deliberately unresolved ownership conflict for construction waste.
+P2_RULE_DEFS = [
+    # (code, issue_type, dept, service, scope, jurisdiction_code, priority,
+    #  eff_from, eff_to, rationale)
+    ("RULE-GARBAGE", "garbage", "MCC-D-HS", "SVC-GARBAGE", "AUTHORITY_WIDE", None, 1,
+     date(2024, 4, 1), None,
+     "Household and domestic garbage collection across MCC wards."),
+    ("RULE-GARBAGE-HIST", "garbage", "MCC-D-HS", "SVC-GARBAGE", "AUTHORITY_WIDE", None, 1,
+     date(2020, 1, 1), date(2023, 12, 31),
+     "Historical garbage routing used before the 2024 boundary version."),
+    ("RULE-OVERFLOW-BIN", "overflowing_bin", "MCC-D-HS", "SVC-GARBAGE", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "Overflowing public bins are emptied by MCC Health & Sanitation."),
+    ("RULE-ILLEGAL-DUMP", "illegal_dumping", "MCC-D-HS", "SVC-GARBAGE", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "Illegal dumping is cleared by MCC Health & Sanitation."),
+    ("RULE-POTHOLE", "pothole", "MCC-D-RI", "SVC-ROAD", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "City-road potholes are repaired by MCC Roads & Infrastructure."),
+    ("RULE-ROAD-DAMAGE", "road_damage", "MCC-D-RI", "SVC-ROAD", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "General road-surface damage sits with MCC Roads & Infrastructure."),
+    ("RULE-DRAINAGE", "drainage", "MCC-D-RI", "SVC-DRAIN", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "Blocked storm-water drains are cleaned by MCC Roads & Infrastructure."),
+    ("RULE-STREETLIGHT", "streetlight", "MCC-D-SL", "SVC-LIGHT", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "Outdoor lighting faults go to MCC Street Lighting."),
+    ("RULE-SEWAGE", "sewage", "MCC-D-WS", "SVC-SEWAGE", "AUTHORITY_WIDE", None, 2,
+     date(2024, 4, 1), None,
+     "Sewage leaks are handled by MCC Water Supply & Drainage."),
+    ("RULE-CW-DEV", "construction_waste", "MCC-D-RI", "SVC-ROAD", "JURISDICTION", "W-05", 1,
+     date(2024, 4, 1), None,
+     "Construction debris blocking V.V. Mohalla access roads routes to MCC Roads "
+     "(demand-side responsibility view)."),
+    ("RULE-CW-SAN", "construction_waste", "MCC-D-HS", "SVC-GARBAGE", "JURISDICTION", "W-05", 1,
+     date(2024, 4, 1), None,
+     "Construction waste in V.V. Mohalla routes to MCC sanitation "
+     "(supply-side responsibility view). Equally specific to RULE-CW-DEV on "
+     "purpose - this models an unresolved ownership conflict."),
+]
+
+# Escalation ladders attached to rules: (rule_code, step_number, authority,
+#                                       department, service, note)
+ESCALATION_DEFS = [
+    ("RULE-POTHOLE", 1, "A-MCC", "MCC-D-RI", "SVC-ROAD",
+     "First response: an MCC road crew assesses and patches the pothole."),
+    ("RULE-POTHOLE", 2, "A-PWD", "PWD-D-SH", "SVC-SHROAD",
+     "Escalated to PWD state-highway units when the stretch is a state highway "
+     "or the damage exceeds city-road scope."),
+    ("RULE-HERITAGE-01", 1, "A-MCC", "MCC-D-HP", "SVC-HERITAGE",
+     "The heritage conservation team responds inside the precinct."),
 ]
 
 # (seed, issue_type, lat, lng, status, locality, description)
@@ -196,6 +304,8 @@ class SeedStats:
     authorities: int = 0
     departments: int = 0
     services: int = 0
+    issue_types: int = 0
+    escalation_steps: int = 0
     jurisdiction_versions: int = 0
     jurisdictions: int = 0
     jurisdiction_changes: int = 0
@@ -237,6 +347,7 @@ def seed_all(session) -> SeedStats:
     authorities = _seed_authorities(session)
     departments = _seed_departments(session, authorities)
     services = _seed_services(session, departments)
+    _seed_issue_types(session)
     versions = _seed_versions(session)
 
     by_code = _seed_jurisdictions(session, authorities, versions)
@@ -244,7 +355,7 @@ def seed_all(session) -> SeedStats:
 
     _seed_changes(session, versions, by_code)
     _seed_wards_areas_roads(session, versions, by_code)
-    _seed_rules(session, departments, services, by_code)
+    _seed_rules(session, authorities, departments, services, by_code)
     complaints = _seed_complaints(session)
     _seed_conflicts(session, complaints)
     _seed_scenarios(session)
@@ -289,6 +400,15 @@ def _seed_services(session, departments) -> dict:
         services[code] = service
     session.flush()
     return services
+
+
+def _seed_issue_types(session) -> None:
+    for code, name, category, description in ISSUE_TYPE_DEFS:
+        session.add(IssueType(
+            code=code, name=name, category=category,
+            description=description, is_active=True,
+        ))
+    session.flush()
 
 
 def _seed_versions(session) -> dict:
@@ -486,9 +606,9 @@ def _seed_wards_areas_roads(session, versions, by_code) -> None:
     session.flush()
 
 
-def _seed_rules(session, departments, services, by_code) -> None:
+def _seed_rules(session, authorities, departments, services, by_code) -> None:
     for (code, issue, dept_code, svc_code, scope, jur_code, priority,
-         eff_from, eff_to, rationale) in RULE_DEFS:
+         eff_from, eff_to, rationale) in RULE_DEFS + P2_RULE_DEFS:
         session.add(RoutingRule(
             code=code,
             issue_type_code=issue,
@@ -502,6 +622,18 @@ def _seed_rules(session, departments, services, by_code) -> None:
             effective_from=eff_from,
             effective_to=eff_to,
             rationale=rationale,
+        ))
+    session.flush()
+
+    for (rule_code, step_number, authority_code, dept_code, svc_code, note) in ESCALATION_DEFS:
+        rule = session.query(RoutingRule).filter(RoutingRule.code == rule_code).one()
+        session.add(EscalationStep(
+            routing_rule_id=rule.id,
+            step_number=step_number,
+            authority_id=authorities[authority_code].id,
+            department_id=departments[dept_code].id,
+            service_id=services[svc_code].id,
+            note=note,
         ))
     session.flush()
 
@@ -605,6 +737,8 @@ def _collect_stats(session) -> SeedStats:
         authorities=session.query(Authority).count(),
         departments=session.query(Department).count(),
         services=session.query(Service).count(),
+        issue_types=session.query(IssueType).count(),
+        escalation_steps=session.query(EscalationStep).count(),
         jurisdiction_versions=session.query(JurisdictionVersion).count(),
         jurisdictions=session.query(Jurisdiction).count(),
         jurisdiction_changes=session.query(JurisdictionChange).count(),

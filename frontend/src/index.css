@@ -346,3 +346,126 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- P2 routing ---- */
+.gis-toolbar-item select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  max-width: 260px;
+}
+
+.rules-card {
+  margin-top: 16px;
+}
+
+.rules-card h3 {
+  margin-top: 0;
+}
+
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rules-table th,
+.rules-table td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rules-table th {
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.actor-chain {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.actor {
+  flex: 1 1 140px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.actor-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.actor-name {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.actor-arrow {
+  align-self: center;
+  color: var(--ink-muted);
+}
+
+.escalation {
+  margin-top: 12px;
+}
+
+.escalation h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.escalation-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px dashed var(--border);
+  font-size: 13px;
+}
+
+.escalation-step-no {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.conflict-box {
+  margin-top: 12px;
+  border: 1px solid var(--bad);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.conflict-box h4 {
+  margin: 0 0 6px;
+}
+
+.conflict-list {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.why-route {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+  line-height: 1.5;
+}

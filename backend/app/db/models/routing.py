@@ -11,6 +11,7 @@ from app.db.base import Base
 from app.db.models.base_mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.escalation import EscalationStep
     from app.db.models.jurisdiction import Jurisdiction
     from app.db.models.reference import Authority, Department, Service
 
@@ -50,3 +51,6 @@ class RoutingRule(Base, TimestampMixin):
     department: Mapped[Department] = relationship()
     service: Mapped[Service] = relationship(back_populates="rules")
     jurisdiction: Mapped[Jurisdiction | None] = relationship()
+    escalation_steps: Mapped[list[EscalationStep]] = relationship(
+        back_populates="rule", order_by="EscalationStep.step_number"
+    )

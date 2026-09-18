@@ -11,18 +11,24 @@ ResponsibleEntity = f(latitude, longitude, issue_type, date,
                       jurisdiction_version, responsibility_rules)
 ```
 
-> **P2 status:** P0 (foundations) and P1 (GIS/temporal layer) shipped.
+> **P2 status:** P0 (foundations), P1 (GIS/temporal layer) and **P2 (civic
+> responsibility routing)** shipped.
 >
 > - **P0:** repo shell, temporal/versioned database (17 tables), GIS
 >   abstraction (SQLite + Shapely), deterministic synthetic demo data, health
 >   API, React shell with all module placeholders, tests and Docker config.
-> - **P1:** GIS API + temporal jurisdiction engine — CRS conversion, geometry
+> - **P1:** GIS + temporal jurisdiction engine — CRS conversion, geometry
 >   validation/repair with reports, describe, spatial algebra, point+date
 >   lookups with closed-open window semantics and overlap detection, and a
 >   working "Historical Explorer" map page (SVG renderer).
+> - **P2:** civic responsibility routing engine + audit trail — issue-type
+>   registry (23 codes), a temporal routing-rule decision table (25 rules, 3
+>   escalation steps), deterministic point+issue+date resolution
+>   (`RESOLVED` / `RESPONSIBILITY_UNRESOLVED` / `NO_JURISDICTION` /
+>   `TEMPORAL_CONFLICT` / invalid variants), append-only audit, and a
+>   "Citizen Routing" map page.
 >
-> The routing / what-if / migration / conflict / graph engines arrive in
-> P2–P3.
+> The what-if / migration / conflict / graph engines arrive in P3.
 
 ---
 
@@ -78,16 +84,17 @@ the DI boundary.
 temporal-civic-dt/
 ├─ backend/
 │  ├─ app/
-│  │  ├─ api/            # routers (health, gis), deps (db, provider, admin guard)
+│  │  ├─ api/            # routers (health, gis, routing), deps (db, provider, routing, admin guard)
 │  │  ├─ core/           # errors (structured envelope), reference IDs
 │  │  ├─ config.py       # pydantic-settings (TCIVIC_* env vars)
-│  │  ├─ db/             # engine/session + SQLAlchemy models (17 tables)
+│  │  ├─ db/             # engine/session + SQLAlchemy models (19 tables)
 │  │  ├─ gis/            # provider ABC + CRS + ops + temporal engine + Shapely impl
 │  │  ├─ main.py         # FastAPI app + lifespan (create tables + seed)
-│  │  ├─ schemas/        # pydantic request/response models (incl. schemas/gis.py)
-│  │  ├─ seed/           # deterministic Mysuru-style demo data
+│  │  ├─ routing/        # P2 responsibility routing service
+│  │  ├─ schemas/        # pydantic request/response models (incl. schemas/gis.py, schemas/routing.py)
+│  │  ├─ seed/           # deterministic Mysuru-style demo data (incl. P2 issue types + routing rules)
 │  │  └─ logging_config.py
-│  ├─ tests/             # pytest suite (P0 health/errors + P1 GIS: 111 tests)
+│  ├─ tests/             # pytest suite (P0 + P1 GIS + P2 routing: 158 tests)
 │  ├─ requirements.txt
 │  ├─ .env.example
 │  └─ Dockerfile
@@ -141,7 +148,7 @@ $env:VITE_DEV_PROXY_TARGET="http://localhost:8010"; npm run dev
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest          # 111 tests (31 P0 + 80 P1 GIS)
+.venv\Scripts\python -m pytest          # 158 tests (P0 health/errors + P1 GIS + P2 routing)
 ```
 
 Frontend static checks: `npm run typecheck` / `npm run build`.
@@ -173,8 +180,10 @@ a Mysuru-scale **synthetic** scenario:
 | Jurisdiction versions | 3 | V1 Delimitation 2020 (superseded), V2 Delimitation 2024 (current), V3 2026 (proposed-only) |
 | Jurisdictions | 21 | 9 wards × 2 versions + NH corridor (2) + heritage overlay |
 | Wards / Areas / Roads | 9 / 3 / 4 | named localities and road classes (NH/SH/CITY) |
-| Routing rules | 14 | temporal + scoped rules, incl. an expired pre-2024 rule |
+| Routing rules | 25 | temporal + scoped rules, incl. 3 escalation steps (expired pre-2024 rule + 2024 garbage-history rule + heritage pothole escalation) |
+| Route extensions | 2 | pothole → PWD State Highways · heritage → MCC Heritage & Public Works |
 | Complaints | 9 | incl. a coordinate that **flips ward** between V1 and V2 |
+| Issue types | 21 | registry incl. 2 legacy + 1 expired codes |
 | Conflicts | 1 | GEO_VS_SERVICE: point in MCC geography, rule routes to NHAI |
 | Scenario | 1 | V3 proposed rezone, isolated from live jurisdictions |
 | Audit log | 2 | seed + version-applied events |
@@ -268,5 +277,6 @@ Nothing above needs to change when moving from the demo store to PostGIS:
 - **P0** (done): foundations — DB schema, temporal model, GIS abstraction, seed, shell UI, tests, Docker.
 - **P1** (done): GIS + temporal jurisdiction layer — CRS/geometry ops API, point+date lookups with
   overlap detection, Historical Explorer map, tests.
-- **P2**: routing engine, what-if simulator, complaint migration, boundary comparison.
+- **P2** (done): civic responsibility routing — issue-type registry, temporal routing-rule
+  decision table with escalation, point+issue+date resolution, audit trail, Citizen Routing map.
 - **P3**: conflict detector + review workflow, responsibility graph, admin boundary management.
