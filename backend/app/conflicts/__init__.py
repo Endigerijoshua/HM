@@ -1,0 +1,1 @@
+"""Responsibility conflict detection (P5)."""

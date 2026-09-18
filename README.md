@@ -243,7 +243,8 @@ All error responses use a single envelope:
 { "error": { "code": "VALIDATION_ERROR", "message": "…", "details": [] } }
 ```
 
-Routes under `auth`, `whatif`, `conflicts`, etc. land with P1–P4.
+Routes are added by phase: P1 GIS, P2 routing, P3 what-if, P4 migration
+preview, P5 conflicts (see below).
 
 ---
 
@@ -279,6 +280,43 @@ responsibility that boundary implies (`RULE-HERITAGE-01` → `HER-01`). A
 complaint is a migration candidate when the proposed jurisdiction, department
 or service differs from live. The endpoint never inserts, updates or commits
 anything — the request session is always rolled back.
+
+---
+
+## Responsibility conflict detector (P5)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/conflicts` | List detected conflicts (optional `?status=`) |
+| `GET` | `/api/v1/conflicts/{conflict_id}` | Single conflict detail |
+| `POST` | `/api/v1/conflicts/detect` | Run deterministic detection against live data |
+
+The detector reuses the P2 routing decision table and the P1 temporal
+jurisdiction engine to answer, per location + issue + date, *expected*
+responsibility (implied by the containing jurisdiction's authority) versus
+*routed* responsibility (assigned by the routing rules). Any disagreement — or
+gap where no responsibility can be established — is persisted as a
+`ResponsibilityConflict` with an OPEN status. Detection is deterministic and
+**idempotent**: an identical open conflict (same complaint, issue, date and
+type) is never duplicated, so re-running the detector reports `created: 0`.
+
+Conflict types (severity in parentheses):
+
+- `AUTHORITY_MISMATCH` (HIGH) — e.g. C-1003: inside MCC geography, rule routes
+  to NHAI; C-1008: inside MCC geography, rule routes to CESC.
+- `DEPARTMENT_MISMATCH` (MEDIUM) — the two equally-specific W-05
+  construction-waste rules route to MCC-D-RI vs MCC-D-HS.
+- `SERVICE_MISMATCH` (MEDIUM) — same tie, SVC-ROAD vs SVC-GARBAGE.
+- `TEMPORAL_RULE_CONFLICT` (MEDIUM) — power_outage at C-1008 has no responsible
+  actor on 2024-03-15 (a two-version gap between the 2020 and 2024 delimitation
+  sets) but routes to CESC on 2024-06-01.
+- `RESPONSIBILITY_GAP` (HIGH) — C-1004 has no containing jurisdiction on any
+  version; the construction-waste tie can't settle a single actor.
+
+Detecting on the seeded dataset creates 7 conflicts; the seeded `CF-1001`
+(`GEO_VS_SERVICE`) remains untouched and the list then holds 8 rows. Only the
+`responsibility_conflicts` table is written by `detect` — jurisdictions,
+routing rules and complaints stay read-only.
 
 ---
 
@@ -319,5 +357,9 @@ Nothing above needs to change when moving from the demo store to PostGIS:
 - **P4** (done): complaint migration preview — read-only per-complaint preview of which OPEN
   complaints would change jurisdiction/authority/department/service under a proposed
   scenario boundary.
-  (Conflict detector + review workflow, applying migrations, responsibility graph,
+- **P5** (done): responsibility conflict detector — deterministic, idempotent detection of
+  jurisdiction-vs-routing mismatches (authority, department, service, temporal rule
+  conflicts and responsibility gaps) persisted with severities and an OPEN/UNDER_REVIEW/
+  RESOLVED/DISMISSED status, plus a read API.
+  (Conflict review workflow, applying migrations, responsibility graph,
   admin boundary management remain future.)
