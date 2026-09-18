@@ -19,9 +19,16 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def init_db() -> None:
-    """Create all modelled tables that do not exist yet."""
-    from app.db import models as models  # noqa: F401  (registration side-effect)
+    """Bring the database in line with the ORM models.
 
+    Stored tables are reconciled with any columns added to models after the
+    SQLite file was first created (schema upgrade), then all modelled tables
+    that do not exist yet are created.
+    """
+    from app.db import models as models  # noqa: F401  (registration side-effect)
+    from app.db.schema_upgrade import upgrade_schema
+
+    upgrade_schema(engine)
     models.Base.metadata.create_all(bind=engine)
 
 
