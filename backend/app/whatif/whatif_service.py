@@ -13,11 +13,16 @@ from __future__ import annotations
 from datetime import date
 
 from shapely.geometry import Point, mapping, shape
-from shapely.wkb import dumps as wkb_dumps
+from shapely.wkb import dumps as wkb_dumps, loads as wkb_loads
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError, GeoValidationError
+from app.db.models.complaints import Complaint
+from app.db.models.issue_types import IssueType
+from app.db.models.jurisdiction import Jurisdiction
+from app.db.models.reference import Authority, Department, Service
+from app.db.models.routing import RoutingRule
 from app.db.models.scenarios import SimulationScenario
 from app.gis.crs import project_to_metric
 from app.gis.shapely_provider import ShapelyGeometryProvider
@@ -26,6 +31,8 @@ from app.routing.routing_service import ResponsibilityRoutingService
 from app.schemas.routing import RoutingResult
 from app.schemas.whatif import (
     ImpactMetric,
+    MigrationComplaintPreview,
+    MigrationPreviewResponse,
     ResponsibilityDelta,
     WhatIfComplaintRef,
     WhatIfImpactResponse,
@@ -35,6 +42,10 @@ from app.schemas.whatif import (
     WhatIfSimulateResponse,
 )
 from app.seed.geometry import HERITAGE_ZONE, HERITAGE_ZONE_EXPANDED
+
+PREVIEW_DATE = date(2024, 6, 1)
+HERITAGE_PRECINCT_CODE = "HER-01"
+HERITAGE_RULE_CODE = "RULE-HERITAGE-01"
 
 
 class WhatIfSimulationService:
@@ -182,6 +193,211 @@ class WhatIfSimulationService:
             ],
             impact=self._impact(inside=True, current=None),
             potential_conflicts=[],
+        )
+
+    def migration_preview(
+        self, scenario_code: str, *, on_date: date = PREVIEW_DATE
+    ) -> MigrationPreviewResponse:
+        """Read-only P4 preview: which OPEN complaints change responsibility.
+
+        Every OPEN complaint is resolved twice against the same (point, issue,
+        preview date) triple — once live (P2 routing) and once under the
+        scenario's proposed boundary (its stored WKB geometry). A complaint is
+        a migration candidate only when its point lies inside the proposed
+        boundary and its proposed heritage-precinct responsibility differs from
+        the live responsibility. Nothing is inserted, updated or committed.
+        """
+        scenario = self._db.scalar(
+            select(SimulationScenario).where(
+                SimulationScenario.code == scenario_code
+            )
+        )
+        if scenario is None:
+            raise NotFoundError(f"Scenario {scenario_code!r} does not exist")
+        boundary = _decoded_boundary(scenario)
+        heritage = self._heritage_precinct()
+
+        complaints = list(
+            self._db.scalars(
+                select(Complaint)
+                .where(Complaint.status == "OPEN")
+                .order_by(Complaint.id)
+            )
+        )
+        issue_names = dict(self._db.execute(select(IssueType.code, IssueType.name)).all())
+
+        rows: list[MigrationComplaintPreview] = []
+        affected_count = 0
+        for complaint in complaints:
+            in_proposed = boundary.covers(Point(complaint.lng, complaint.lat))
+            current = self._routing_service().resolve(
+                longitude=complaint.lng,
+                latitude=complaint.lat,
+                issue_type=complaint.issue_type_code,
+                on_date=on_date,
+            )
+            proposed = heritage if in_proposed else None
+            migrated = self._requires_migration(current, in_proposed, proposed)
+            if migrated:
+                affected_count += 1
+            rows.append(
+                self._preview_row(
+                    complaint=complaint,
+                    in_proposed=in_proposed,
+                    current=current,
+                    proposed=proposed,
+                    migrated=migrated,
+                    scenario_code=scenario_code,
+                    issue_names=issue_names,
+                )
+            )
+        return MigrationPreviewResponse(
+            scenario_code=scenario_code,
+            scenario_name=scenario.name,
+            preview_date=on_date,
+            total_open_complaints=len(complaints),
+            affected_count=affected_count,
+            complaints=rows,
+        )
+
+    # ------------------------------------------------------------------
+    # P4 migration preview helpers
+    # ------------------------------------------------------------------
+
+    def _heritage_precinct(self) -> dict | None:
+        jurisdiction = self._db.scalar(
+            select(Jurisdiction).where(Jurisdiction.code == HERITAGE_PRECINCT_CODE)
+        )
+        rule = self._db.scalar(
+            select(RoutingRule).where(RoutingRule.code == HERITAGE_RULE_CODE)
+        )
+        if jurisdiction is None or rule is None:
+            return None
+        return {
+            "jurisdiction": jurisdiction,
+            "authority": self._db.get(Authority, rule.authority_id),
+            "department": self._db.get(Department, rule.department_id),
+            "service": self._db.get(Service, rule.service_id),
+        }
+
+    def _premise_fields(
+        self,
+        current: RoutingResult,
+        complaint: Complaint,
+    ) -> dict:
+        return {
+            "jurisdiction_code": current.jurisdiction_code,
+            "jurisdiction_name": current.jurisdiction_name,
+            "ward_code": current.ward_code,
+            "ward_name": current.ward_name,
+            "authority_code": current.authority.code if current.authority else None,
+            "authority_name": current.authority.name if current.authority else None,
+            "department_code": current.department.code if current.department else None,
+            "department_name": current.department.name if current.department else None,
+            "service_code": current.service.code if current.service else None,
+            "service_name": current.service.name if current.service else None,
+        }
+
+    def _heritage_fields(
+        self,
+        current: RoutingResult,
+        proposed: dict,
+    ) -> dict:
+        authority = proposed["authority"]
+        department = proposed["department"]
+        service = proposed["service"]
+        return {
+            "jurisdiction_code": proposed["jurisdiction"].code,
+            "jurisdiction_name": proposed["jurisdiction"].name,
+            "ward_code": current.ward_code,
+            "ward_name": current.ward_name,
+            "authority_code": authority.code if authority else None,
+            "authority_name": authority.name if authority else None,
+            "department_code": department.code if department else None,
+            "department_name": department.name if department else None,
+            "service_code": service.code if service else None,
+            "service_name": service.name if service else None,
+        }
+
+    def _requires_migration(
+        self,
+        current: RoutingResult,
+        in_proposed: bool,
+        proposed: dict | None,
+    ) -> bool:
+        if not in_proposed or proposed is None:
+            return False
+        return (
+            current.jurisdiction_code != proposed["jurisdiction"].code
+            or (current.department.code if current.department else None)
+            != (proposed["department"].code if proposed["department"] else None)
+            or (current.service.code if current.service else None)
+            != (proposed["service"].code if proposed["service"] else None)
+        )
+
+    def _preview_row(
+        self,
+        *,
+        complaint: Complaint,
+        in_proposed: bool,
+        current: RoutingResult,
+        proposed: dict | None,
+        migrated: bool,
+        scenario_code: str,
+        issue_names: dict,
+    ) -> MigrationComplaintPreview:
+        current_fields = self._premise_fields(current, complaint)
+        proposed_fields = (
+            self._heritage_fields(current, proposed) if proposed else current_fields
+        )
+        if migrated:
+            explanation = (
+                f"Inside the proposed boundary of {scenario_code}: live responsibility "
+                f"({current.department.name} / {current.service.name} under "
+                f"{current.jurisdiction_name}) becomes the heritage precinct "
+                f"({proposed['department'].name} / {proposed['service'].name}) once applied."
+            )
+        elif in_proposed:
+            explanation = (
+                f"Inside the proposed boundary of {scenario_code}, but already under "
+                f"heritage-precinct responsibility; no migration required."
+            )
+        else:
+            explanation = (
+                f"Outside the proposed boundary of {scenario_code}; responsibility "
+                "is unchanged."
+            )
+        return MigrationComplaintPreview(
+            complaint_id=complaint.id,
+            public_ref=complaint.public_ref,
+            issue_type=complaint.issue_type_code,
+            issue_type_name=issue_names.get(complaint.issue_type_code),
+            latitude=complaint.lat,
+            longitude=complaint.lng,
+            status=complaint.status,
+            in_proposed_boundary=in_proposed,
+            current_jurisdiction_code=current_fields["jurisdiction_code"],
+            current_jurisdiction_name=current_fields["jurisdiction_name"],
+            current_ward_code=current_fields["ward_code"],
+            current_ward_name=current_fields["ward_name"],
+            current_authority_code=current_fields["authority_code"],
+            current_authority_name=current_fields["authority_name"],
+            current_department_code=current_fields["department_code"],
+            current_department_name=current_fields["department_name"],
+            current_service_code=current_fields["service_code"],
+            current_service_name=current_fields["service_name"],
+            proposed_jurisdiction_code=proposed_fields["jurisdiction_code"],
+            proposed_jurisdiction_name=proposed_fields["jurisdiction_name"],
+            proposed_ward_code=proposed_fields["ward_code"],
+            proposed_ward_name=proposed_fields["ward_name"],
+            proposed_authority_code=proposed_fields["authority_code"],
+            proposed_authority_name=proposed_fields["authority_name"],
+            proposed_department_code=proposed_fields["department_code"],
+            proposed_department_name=proposed_fields["department_name"],
+            proposed_service_code=proposed_fields["service_code"],
+            proposed_service_name=proposed_fields["service_name"],
+            migration_required=migrated,
+            explanation=explanation,
         )
 
     # ------------------------------------------------------------------
@@ -339,3 +555,13 @@ def _parse_geojson(data: str | None) -> dict | None:
     if not data:
         return None
     return json.loads(data)
+
+
+def _decoded_boundary(scenario: SimulationScenario):
+    """Decode the scenario's stored WKB proposed boundary (shapely path)."""
+    try:
+        return wkb_loads(bytes(scenario.geometry_wkb))
+    except Exception as exc:  # noqa: BLE001 - surface decode failures as 400
+        raise GeoValidationError(
+            f"Could not decode boundary geometry for scenario {scenario.code!r}: {exc}"
+        ) from exc

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps_whatif import get_whatif_service
 from app.db.models.scenarios import SimulationScenario
 from app.schemas.whatif import (
+    MigrationPreviewResponse,
     WhatIfScenarioCreateRequest,
     WhatIfScenarioListResponse,
     WhatIfScenarioResponse,
@@ -75,3 +76,15 @@ def simulate(
         issue_type_code=request.issue_type_code,
         on_date=request.on_date,
     )
+
+
+@router.get(
+    "/scenarios/{code}/migration-preview",
+    response_model=MigrationPreviewResponse,
+    summary="Read-only complaint migration preview (P4)",
+)
+def migration_preview(
+    code: str,
+    service: WhatIfSimulationService = Depends(get_whatif_service),
+) -> MigrationPreviewResponse:
+    return service.migration_preview(scenario_code=code)

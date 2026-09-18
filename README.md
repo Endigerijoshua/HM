@@ -243,7 +243,7 @@ All error responses use a single envelope:
 { "error": { "code": "VALIDATION_ERROR", "message": "…", "details": [] } }
 ```
 
-Routes under `auth`, `whatif`, `conflicts`, etc. land with P1–P3.
+Routes under `auth`, `whatif`, `conflicts`, etc. land with P1–P4.
 
 ---
 
@@ -263,6 +263,22 @@ Simulation is **strictly read-only**: it resolves the live responsibility
 inserting/updating a `jurisdictions`, `jurisdiction_versions`,
 `routing_rules`, or `complaints` row. Applying a scenario is an explicit
 migration flow in a later phase.
+
+---
+
+## Complaint migration preview (P4)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/whatif/scenarios/{code}/migration-preview` | Read-only preview of which OPEN complaints would change responsibility under a proposed scenario boundary |
+
+For every OPEN complaint the preview resolves the live responsibility (P2
+routing) with a fixed preview date (`2024-06-01`) and, when the complaint's
+point lies inside the scenario's stored boundary, the heritage-precinct
+responsibility that boundary implies (`RULE-HERITAGE-01` → `HER-01`). A
+complaint is a migration candidate when the proposed jurisdiction, department
+or service differs from live. The endpoint never inserts, updates or commits
+anything — the request session is always rolled back.
 
 ---
 
@@ -300,4 +316,8 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   decision table with escalation, point+issue+date resolution, audit trail, Citizen Routing map.
 - **P3** (done): what-if jurisdiction simulator — deterministic DRAFT scenarios with GeoJSON
   geometry, strictly read-only live-vs-proposed simulation against the heritage overlay.
-  (Conflict detector + review workflow, responsibility graph, admin boundary management remain future.)
+- **P4** (done): complaint migration preview — read-only per-complaint preview of which OPEN
+  complaints would change jurisdiction/authority/department/service under a proposed
+  scenario boundary.
+  (Conflict detector + review workflow, applying migrations, responsibility graph,
+  admin boundary management remain future.)

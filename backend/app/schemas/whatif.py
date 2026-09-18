@@ -134,3 +134,49 @@ class WhatIfImpactResponse(BaseModel):
     affected_complaints: list[WhatIfComplaintRef]
     impact: list[ImpactMetric]
     potential_conflicts: list[str]
+
+
+class MigrationComplaintPreview(BaseModel):
+    """Per-complaint before/after responsibility for the migration preview (P4)."""
+
+    complaint_id: int
+    public_ref: str
+    issue_type: str
+    issue_type_name: str | None = None
+    latitude: float
+    longitude: float
+    status: str
+    in_proposed_boundary: bool
+    current_jurisdiction_code: str | None = None
+    current_jurisdiction_name: str | None = None
+    current_ward_code: str | None = None
+    current_ward_name: str | None = None
+    current_authority_code: str | None = None
+    current_authority_name: str | None = None
+    current_department_code: str | None = None
+    current_department_name: str | None = None
+    current_service_code: str | None = None
+    current_service_name: str | None = None
+    proposed_jurisdiction_code: str | None = None
+    proposed_jurisdiction_name: str | None = None
+    proposed_ward_code: str | None = None
+    proposed_ward_name: str | None = None
+    proposed_authority_code: str | None = None
+    proposed_authority_name: str | None = None
+    proposed_department_code: str | None = None
+    proposed_department_name: str | None = None
+    proposed_service_code: str | None = None
+    proposed_service_name: str | None = None
+    migration_required: bool
+    explanation: str
+
+
+class MigrationPreviewResponse(BaseModel):
+    """Read-only migration preview for a proposed boundary (P4)."""
+
+    scenario_code: str
+    scenario_name: str
+    preview_date: date
+    total_open_complaints: int
+    affected_count: int
+    complaints: list[MigrationComplaintPreview] = Field(default_factory=list)
