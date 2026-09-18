@@ -182,7 +182,7 @@ a Mysuru-scale **synthetic** scenario:
 | Wards / Areas / Roads | 9 / 3 / 4 | named localities and road classes (NH/SH/CITY) |
 | Routing rules | 25 | temporal + scoped rules, incl. 3 escalation steps (expired pre-2024 rule + 2024 garbage-history rule + heritage pothole escalation) |
 | Route extensions | 2 | pothole → PWD State Highways · heritage → MCC Heritage & Public Works |
-| Complaints | 9 | incl. a coordinate that **flips ward** between V1 and V2 |
+| Complaints | 9 | incl. a coordinate whose boundary version and route rule flip between V1 and V2 |
 | Issue types | 21 | registry incl. 2 legacy + 1 expired codes |
 | Conflicts | 1 | GEO_VS_SERVICE: point in MCC geography, rule routes to NHAI |
 | Scenario | 1 | V3 proposed rezone, isolated from live jurisdictions |
@@ -196,13 +196,27 @@ a Mysuru-scale **synthetic** scenario:
 
 ### Historical replay demo
 
-Complaint `C-1001` sits on a deterministically computed "flip point": the same
-coordinate resolves to **different wards** on 2023-06-01 (V1) vs 2024-06-01
-(V2). In the Historical Explorer (`/history`) you can slide the date, click
-the flip point (76.6627, 12.2313) on the map, and watch the responsible ward
-change from **W-03** (DELIM-2020) to **W-01** (DELIM-2024). The gap between the
-two versions (2024-01-01 → 2024-03-31) reports `NO_JURISDICTION`, demonstrating
-that closed-open validity windows leave no overlapping authority.
+Complaint `C-1001` sits on a deterministically computed "flip point"
+(`app.seed.seed_runner._flip_coords`): its covering ward-mosaic cell differs
+between the V1 and V2 boundaries. Under the current seed that coordinate is
+**(76.60731308845853, 12.279255877741852)** — it stays in ward **W-01** in both
+versions, but the boundary **version** and the routing **rule** flip:
+`DELIM-2020 + RULE-GARBAGE-PRE2024` (pre-2024) vs
+`DELIM-2024 + RULE-GARBAGE-01`. In the Historical Explorer (`/history`) sliding
+the date across the versions shows the transition. The gap between the two
+versions bounds — **2023-12-31 → 2024-04-01** (`[2023-12-31, 2024-04-01)`) —
+reports `NO_JURISDICTION`, demonstrating that closed-open validity windows
+leave no overlapping authority.
+
+The heritage point **(76.635, 12.3125)** is the *responsibility* flip: under
+DELIM-2020 it has no matching rule (W-05 unresolved), across the gap no
+jurisdiction, and from 2024-04-01 it resolves to the MCC Heritage & Public
+Works chain via RULE-HERITAGE-01.
+
+> Note: some older docs/hints quote `(76.6627, 12.2313)` "W-03 → W-01". That
+> coordinate is **not** the seeded flip point — in the current seed it is
+> outside every version's ward mosaic and reports `NO_JURISDICTION`. The values
+> above were verified against live `GET /api/v1/replay/point` output.
 
 ---
 
@@ -353,6 +367,55 @@ still writes a P2 audit row. The frontend shows the graph as a CSS/SVG-free
 flow in the "Why this route? · Responsibility Graph" section of Citizen
 Routing — no graph database or graph rendering library is involved.
 
+--- 
+
+## Historical jurisdiction replay (P7)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/replay/point?latitude=..&longitude=..&issue_type=..&start_date=..&end_date=..` | Read-only chronological replay of one coordinate + issue across a date range |
+
+Replay lets one coordinate be asked about **on any date independently**: each
+sampled day is a separate P2 routing resolution, so the same point may resolve
+to different jurisdictions, versions, or responsibilities on different dates.
+The endpoint merges identical consecutive outcomes into **periods** and marks
+every **boundary transition** (`boundary_change`), so gaps, version changes,
+and responsibility changes are explicit.
+
+- **Reuses the P2 routing service** — period boundaries are simply where the
+  P2 decision changes; there is no duplicated routing logic.
+- **Strictly read-only** — a replay resolves hundreds of days through P2,
+  which would normally write one audit row per resolve, but the request
+  session is rolled back, so the audit log is untouched (verified by test).
+- **Closed-open `[start, end)`** — `day_count = end − start`; a period spans
+  `[effective_from, effective_to)`. An empty window (`start == end`) returns
+  `period_count = 0`; `end < start` is a `400 INVALID_DATE_RANGE`.
+- **Deterministic** — identical inputs produce byte-identical output.
+
+Response model: `status` (`REPLAY_OK`), echoed `latitude`/`longitude`/
+`issue_type`/`start_date`/`end_date`, `day_count`, `period_count`,
+`jurisdiction_change_count`, and `periods[]`. Each period carries
+`effective_from`/`effective_to`, routing `status`, `boundary_change`,
+jurisdiction `code`/`name`/`kind`, boundary `version_code`/`status`,
+`ward_code`/`ward_name`, `matched_scope`, the authority / department / service
+(`code` + `name` + `id`), the matched `routing_rule_code`/`id`, any
+`conflict_rule_codes`, an `explanation`, `reason`, and a compact `chain`
+(e.g. `W-05 → A-MCC → MCC-D-HP`, or `(no jurisdiction)`/`(unresolved)` when
+responsibility cannot be settled).
+
+Verified examples against the seed:
+
+- **Flip point** `(76.60731308845853, 12.279255877741852)`,
+  `garbage_collection`, `2023-06-01 → 2024-06-01`:
+  `[2023-06-01, 2023-12-31)` `W-01`/`DELIM-2020`/`RULE-GARBAGE-PRE2024` →
+  `[2023-12-31, 2024-04-01)` `NO_JURISDICTION` →
+  `[2024-04-01, 2024-06-01)` `W-01`/`DELIM-2024`/`RULE-GARBAGE-01`.
+- **Heritage point** `(76.635, 12.3125)`, `heritage_maintenance`,
+  `2023-06-01 → 2024-05-01`: `W-05` **unresolved** (no pre-2024 rule) → gap →
+  `W-05` **resolved** to `MCC Heritage & Public Works` /
+  `RULE-HERITAGE-01` — the same coordinate's responsibility changes across the
+  boundary-version change.
+
 ---
 
 ## Security posture (P0 baseline)
@@ -402,3 +465,7 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   and rendered as a simple flow on Citizen Routing.
   (Conflict review workflow, applying migrations, admin boundary management
   remain future.)
+- **P7** (done): historical jurisdiction replay — read-only chronological
+  replay of one coordinate + issue across a date range via P2, collapsing
+  identical outcomes into periods with explicit boundary transitions and
+  closed-open `[start, end)` semantics.

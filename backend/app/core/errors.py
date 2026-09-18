@@ -56,6 +56,13 @@ class ResponsibilityUnresolvedError(AppError):
     code = "RESPONSIBILITY_UNRESOLVED"
 
 
+class DateRangeError(AppError):
+    """Raised when a replay window is invalid or exceeds its bounds."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    code = "INVALID_DATE_RANGE"
+
+
 async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     logger.warning("Handled %s on %s: %s", exc.code, request.url.path, exc.message)
     return JSONResponse(
