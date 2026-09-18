@@ -16,9 +16,15 @@ interface QuickScenario {
 /** Deterministic quick flips (seeded demo geometry, no live mutation). */
 const QUICK_SCENARIOS: QuickScenario[] = [
   {
-    label: "Heritage core · W-05",
+    label: "Heritage expansion · inside rezone",
     code: "SC-V3-REZONE",
-    point: { lon: 76.6847217167165, lat: 12.276616211968356 },
+    point: { lon: 76.6438, lat: 12.3082 },
+    issue: "heritage_maintenance",
+  },
+  {
+    label: "Heritage core · outside rezone",
+    code: "SC-V3-REZONE",
+    point: { lon: 76.635, lat: 12.3125 },
     issue: "heritage_maintenance",
   },
   {
@@ -26,12 +32,6 @@ const QUICK_SCENARIOS: QuickScenario[] = [
     code: "SC-V3-REZONE",
     point: { lon: 76.60731308845853, lat: 12.279255877741852 },
     issue: "garbage_collection",
-  },
-  {
-    label: "Vanilla · V.V. Mohalla",
-    code: "SC-V3-REZONE",
-    point: { lon: 76.6438, lat: 12.3082 },
-    issue: "heritage_maintenance",
   },
 ];
 
@@ -44,8 +44,8 @@ function metricDelta(metric: ImpactMetric): string {
 export default function WhatIfSimulatorPage() {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ok" } | { kind: "error"; message: string }>({ kind: "loading" });
   const [scenario, setScenario] = useState<WhatIfScenarioSummary | null>(null);
-  const [lon, setLon] = useState("76.6847217167165");
-  const [lat, setLat] = useState("12.276616211968356");
+  const [lon, setLon] = useState("76.6438");
+  const [lat, setLat] = useState("12.3082");
   const [issue, setIssue] = useState("heritage_maintenance");
   const [simulating, setSimulating] = useState(false);
   const [result, setResult] = useState<WhatIfSimulateResponse | null>(null);

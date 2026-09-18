@@ -24,27 +24,27 @@ const QUICK_DATES = [
   { label: "V2 · DELIM-2024", date: "2024-06-01" },
 ];
 
-/** Deterministic demo points (representative points of V2 geometries). */
+/** Deterministic demo points (verified in-force + resolve/conflict for 2024-06-01). */
 const SCENARIOS = [
   {
     label: "Pothole · W-05",
     issue: "pothole",
-    point: { lat: 12.276616211968356, lng: 76.6847217167165 },
+    point: { lat: 12.3082, lng: 76.6438 },
   },
   {
-    label: "Construction waste · W-05 conflict",
-    issue: "construction_waste",
-    point: { lat: 12.276616211968356, lng: 76.6847217167165 },
-  },
-  {
-    label: "Heritage maintenance · HER-01",
+    label: "Heritage maintenance · W-05",
     issue: "heritage_maintenance",
     point: { lat: 12.3125, lng: 76.635 },
   },
   {
-    label: "Garbage collection · flip point",
+    label: "Garbage collection · V1/V2 flip",
     issue: "garbage_collection",
     point: { lat: 12.279255877741852, lng: 76.60731308845853 },
+  },
+  {
+    label: "Construction waste · unresolved",
+    issue: "construction_waste",
+    point: { lat: 12.3125, lng: 76.635 },
   },
 ];
 

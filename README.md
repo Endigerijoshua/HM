@@ -2,33 +2,46 @@
 
 HackMysuru 2026 · **Routing** problem statement.
 
-Determines the responsible civic **authority, department and service** for a
-location + issue while honoring **jurisdiction boundaries that change over
-time**.
+## Problem statement
+
+Civic authority in Indian cities is fragmented and date-sensitive: ward
+boundaries get delimitated, authorities get reorganized and routing rules
+change over time. Most civic apps assume a *static* map, so a citizen or
+official asking "who is responsible here, for this issue, right now?" gets a
+wrong or stale answer — and no one can answer "who was responsible last year?"
+or "what changes would happen if this boundary is redrawn?".
+
+## Solution
+
+A **deterministic, explainable digital twin** that treats jurisdiction as
+versioned temporal data and decides responsibility as a pure function:
 
 ```
 ResponsibleEntity = f(latitude, longitude, issue_type, date,
                       jurisdiction_version, responsibility_rules)
 ```
 
-> **P2 status:** P0 (foundations), P1 (GIS/temporal layer) and **P2 (civic
-> responsibility routing)** shipped.
->
-> - **P0:** repo shell, temporal/versioned database (17 tables), GIS
->   abstraction (SQLite + Shapely), deterministic synthetic demo data, health
->   API, React shell with all module placeholders, tests and Docker config.
-> - **P1:** GIS + temporal jurisdiction engine — CRS conversion, geometry
->   validation/repair with reports, describe, spatial algebra, point+date
->   lookups with closed-open window semantics and overlap detection, and a
->   working "Historical Explorer" map page (SVG renderer).
-> - **P2:** civic responsibility routing engine + audit trail — issue-type
->   registry (23 codes), a temporal routing-rule decision table (25 rules, 3
->   escalation steps), deterministic point+issue+date resolution
->   (`RESOLVED` / `RESPONSIBILITY_UNRESOLVED` / `NO_JURISDICTION` /
->   `TEMPORAL_CONFLICT` / invalid variants), append-only audit, and a
->   "Citizen Routing" map page.
->
-> The what-if / migration / conflict / graph engines arrive in P3.
+Given a location + issue + date it returns the **authority, department and
+service** that must act, with the **routing rule** that matched, the
+jurisdiction version in force, an **explanation**, an escalation path and an
+audit record. The same engine is also used to **replay history**, **simulate
+what-if boundary changes**, **preview complaint migrations**, **detect
+jurisdiction-vs-routing conflicts** and **render an explanatory
+responsibility graph** — all through one web app.
+
+## Core innovation
+
+Boundaries are **never overwritten**. Every delimitation inserts a new row and
+records a transition, so past versions stay queryable forever. This single
+design decision turns "when did responsibility change here?" from an unsolved
+question into an index lookup, and makes every what-if / migration / conflict
+analysis provably read-only and deterministic.
+
+## Status
+
+P0 foundations → P8 complete frontend integration are all shipped and tested;
+the 8-page web app drives the real backend end to end (see [Roadmap](#roadmap)
+for the per-phase breakdown).
 
 ---
 
@@ -64,6 +77,19 @@ FastAPI (routers → pydantic schemas → services)
 **Key idea:** business logic talks only to the `GeometryProvider` interface.
 Swapping the demo geometry engine for PostGIS later requires no changes above
 the DI boundary.
+
+## Tech stack
+
+- **Backend:** Python 3.13 · FastAPI · SQLAlchemy · SQLite (SQLAlchemy,
+  file-backed demo store) · Pydantic v2 · Shapely (geometry predicates) ·
+  Uvicorn.
+- **Frontend:** React 18 · TypeScript 5 · Vite 5 · react-router-dom 6 · plain
+  CSS custom properties (no UI framework) · SVG vector jurisdiction map (no
+  map SDK) · zero additional runtime dependencies beyond the four above.
+- **Tests:** pytest (backend, in-process TestClient + live HTTP smoke) ·
+  `tsc --noEmit` + `vite build` (frontend).
+- **Ops:** Docker compose for a one-command demo stack (backend + nginx
+  serving the static build and reverse-proxying `/api`).
 
 ### Temporal model
 
@@ -182,6 +208,34 @@ The compose file mounts a named volume so the SQLite database survives
 restarts. No external or paid APIs are used anywhere.
 
 ---
+
+## Demo flow (the judge walkthrough)
+
+The app is built as one continuous story — every step feeds the next, and
+every page reads live backend data:
+
+1. **Dashboard** — health indicator, the core formula
+   *Responsible Entity = Location + Issue + Date + Version + Rules*, the
+   responsibility pipeline and the 7 implemented modules. **Start Demo**
+   drops into Citizen Routing.
+2. **Citizen Routing** — click a quick flip or the map, then pick date/issue:
+   the engine returns jurisdiction, authority, department, service, matched
+   rule and explanation. "Explore this location historically" carries the same
+   coordinate into Historical Replay; "Open in Historical Explorer" into the map.
+3. **Historical Explorer / Replay** — slide the date to watch the same
+   coordinate change jurisdiction across `DELIM-2020` → gap →
+   `DELIM-2024`; Replay renders the timeline with explicit **BOUNDARY CHANGE**
+   markers.
+4. **What-If Simulator** — pick the proposed rezone: before/after boundary
+   cards, impact metrics, affected complaints and potential conflicts under a
+   **SIMULATION ONLY · NO LIVE DATA MODIFIED** ribbon.
+5. **Complaint Migration** — the 3 complaints that must migrate, shown
+   `OLD → NEW` (jurisdiction/authority/department/service) as a **READ-ONLY
+   PREVIEW**.
+6. **Responsibility Conflicts** — the detector's persisted findings
+   (e.g. `GEO_VS_SERVICE`) with severity and status.
+7. **Responsibility Graph** — the same point renders `Location →
+   Jurisdiction → Authority → Department → Service → Issue → Escalation`.
 
 ## Demo / seed data (synthetic)
 
@@ -495,6 +549,30 @@ the verified flip coordinate `(76.60731308845853, 12.279255877741852)`
 - `GeometryProvider.validate_geojson_geometry` rejects non-polygon, empty, or self-intersecting GeoJSON (used by uploads from P1).
 - CORS allow-list configured by env.
 - Append-only audit log seeded and modeled for routing/admin actions.
+
+---
+
+## Known limitations
+
+- Demo data is **synthetic** (deterministic seed): a small Mysuru-like city
+  with 9 wards, 3 boundary versions, 23 issue types and 25 routing rules. It is
+  designed for evaluation, not real governance.
+- The migration page is a **read-only preview**; actually applying a scenario
+  to the live boundary set (and the conflict review workflow) is not
+  implemented — the P4/P5 pages are honest about this in-app.
+- Routing tables are **single-scope decision tables** (per issue, with optional
+  scope overrides and escalation) rather than a full graph; conflicts between
+  overlapping responsibilities are *detected and reported*, not auto-reconciled.
+- The 9 pre-existing backend test failures (P1 geometry/uploads scopes) are a
+  known baseline; they predate P2–P9 and are not addressed by this hardening
+  phase.
+- The demo `SC-V3-REZONE` scenario was seeded with a geometry that, for a
+  handful of complaint points near its edge, reports issued by the point-in-
+  polygon of *simulate* slightly differently from *migration-preview*; both
+  views are internally consistent, and the mismatch never changes routing
+  output shown to the user.
+- Maps are projected into a fixed local viewBox (SVG); they are resolution-
+  independent and resize-safe, but have no pan/zoom controls yet.
 
 ---
 
