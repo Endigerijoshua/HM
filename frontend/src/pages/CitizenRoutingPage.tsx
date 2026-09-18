@@ -13,6 +13,7 @@ import type {
 } from "../api/routingTypes";
 import { ResponsibilityGraph } from "../components/graph/ResponsibilityGraph";
 import { JurisdictionMap } from "../components/map/JurisdictionMap";
+import { RoutingExplanation } from "../components/routing/RoutingExplanation";
 
 const MIN_DATE = "2020-01-01";
 const MAX_DATE = "2026-12-31";
@@ -313,6 +314,7 @@ export default function CitizenRoutingPage() {
           {!resolving && !resultError && result && (
             <>
               <RoutingResultView result={result} />
+              <RoutingExplanation result={result} />
               <div className="replay-links">
                 <Link
                   className="btn btn-outline"

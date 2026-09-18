@@ -46,6 +46,8 @@ interface MapProps {
   probe: { lat: number; lng: number } | null;
   highlightCode: string | null;
   activeVersionLabels: string[];
+  proposedGeometry?: GeoJsonGeometry | null;
+  proposedLabel?: string | null;
   onSelect: (lat: number, lng: number) => void;
 }
 
@@ -62,11 +64,13 @@ function computeBounds(
   jurisdictions: JurisdictionSummary[],
   areas: { geometry_geojson?: GeoJsonGeometry | null }[],
   roads: { geometry_geojson?: GeoJsonGeometry | null }[],
+  proposedGeometry?: GeoJsonGeometry | null,
 ): Bounds {
   const pts: Position[] = [];
   for (const j of jurisdictions) if (j.geometry_geojson) collectCoords(j.geometry_geojson.coordinates, pts);
   for (const a of areas) if (a.geometry_geojson) collectCoords(a.geometry_geojson.coordinates, pts);
   for (const r of roads) if (r.geometry_geojson) collectCoords(r.geometry_geojson.coordinates, pts);
+  if (proposedGeometry) collectCoords(proposedGeometry.coordinates, pts);
   if (pts.length === 0) return DEMO_BOUNDS;
   const lons = pts.map((p) => p[0]);
   const lats = pts.map((p) => p[1]);
@@ -164,13 +168,15 @@ export function JurisdictionMap({
   probe,
   highlightCode,
   activeVersionLabels,
+  proposedGeometry,
+  proposedLabel,
   onSelect,
 }: MapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const bounds = useMemo(
-    () => computeBounds(jurisdictions, areas, roads),
-    [jurisdictions, areas, roads],
+    () => computeBounds(jurisdictions, areas, roads, proposedGeometry),
+    [jurisdictions, areas, roads, proposedGeometry],
   );
 
   const layers = useMemo(() => {
@@ -180,6 +186,10 @@ export function JurisdictionMap({
     const wards: { d: string; stroke: string; fill: string; code: string; highlight: boolean }[] = [];
     const others: { d: string; stroke: string; fill: string; dash?: string; code: string }[] = [];
     const labels: { x: number; y: number; text: string }[] = [];
+
+    const proposed = proposedGeometry
+      ? geometryToShapes(proposedGeometry, bounds, proposedLabel ?? undefined)
+      : null;
 
     for (const j of jurisdictions) {
       const style = KIND_FILL[j.kind] ?? DEFAULT_STYLE;
@@ -193,8 +203,8 @@ export function JurisdictionMap({
       }
       if (shapes.label) labels.push(shapes.label);
     }
-    return { areaPaths, roadPaths, wards, others, labels };
-  }, [jurisdictions, areas, roads, bounds, highlightCode]);
+    return { areaPaths, roadPaths, wards, others, labels, proposed };
+  }, [jurisdictions, areas, roads, bounds, highlightCode, proposedGeometry, proposedLabel]);
 
   const handleClick = (event: MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
@@ -259,6 +269,38 @@ export function JurisdictionMap({
           opacity={0.85}
         />
       ))}
+
+      {layers.proposed && (
+        <>
+          {layers.proposed.paths.map((d, i) => (
+            <path
+              key={`p${i}`}
+              d={d}
+              fill="rgba(124,58,237,0.08)"
+              stroke="#7c3aed"
+              strokeWidth={2.5}
+              strokeDasharray="10 6"
+            />
+          ))}
+          {layers.proposed.polylines.map((d, i) => (
+            <path key={`pl${i}`} d={d} fill="none" stroke="#7c3aed" strokeWidth={2.5} strokeDasharray="10 6" />
+          ))}
+          {layers.proposed.points.map((p, i) => {
+            const pos = project(p[0], p[1], bounds);
+            return <circle key={`pp${i}`} cx={pos.x} cy={pos.y} r={5} fill="#7c3aed" />;
+          })}
+          {layers.proposed.label && (
+            <text
+              x={layers.proposed.label.x}
+              y={layers.proposed.label.y}
+              textAnchor="middle"
+              className="gis-label gis-label-proposed"
+            >
+              {layers.proposed.label.text}
+            </text>
+          )}
+        </>
+      )}
 
       {layers.labels.map((l, i) => (
         <text key={`l${i}`} x={l.x} y={l.y} textAnchor="middle" className="gis-label">
