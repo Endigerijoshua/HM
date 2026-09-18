@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routers.gis import router as gis_router
 from app.api.routers.health import router as health_router
 from app.api.routers.routing import router as routing_router
+from app.api.routers.whatif import router as whatif_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.db.session import SessionLocal, init_db
@@ -67,3 +68,4 @@ def root() -> ApiInfo:
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(gis_router, prefix=settings.api_v1_prefix)
 app.include_router(routing_router, prefix=settings.api_v1_prefix)
+app.include_router(whatif_router, prefix=settings.api_v1_prefix)

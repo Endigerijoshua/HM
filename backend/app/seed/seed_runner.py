@@ -45,6 +45,7 @@ from app.seed.geometry import (
     WARD_MINY,
     build_mosaic,
     find_flip_point,
+    find_flip_point_between,
 )
 
 logger = logging.getLogger("app.seed")
@@ -335,7 +336,9 @@ def _flip_coords() -> tuple[float, float]:
     """Recompute the deterministic coordinate whose ward differs V1 vs V2."""
     mosaic_v1 = build_mosaic(WARD_MINX, WARD_MINY, WARD_MAXX, WARD_MAXY, 3, 3, seed=MOSAIC_V1_SEED)
     mosaic_v2 = build_mosaic(WARD_MINX, WARD_MINY, WARD_MAXX, WARD_MAXY, 3, 3, seed=MOSAIC_V2_SEED)
-    return find_flip_point(mosaic_v1.cells, mosaic_v2.cells, Random(FLIP_RNG_SEED))
+    return find_flip_point_between(
+        mosaic_v1.cells, mosaic_v2.cells, Random(FLIP_RNG_SEED)
+    )
 
 
 def seed_all(session) -> SeedStats:

@@ -33,6 +33,16 @@ export {
   fetchRoutingRules,
   resolveRoute,
 } from "./routing";
+export { fetchWhatIfScenarios, simulateWhatIf } from "./whatif";
+export type {
+  ImpactMetric,
+  ResponsibilityDelta,
+  WhatIfComplaintRef,
+  WhatIfScenarioListResponse,
+  WhatIfScenarioStatus,
+  WhatIfScenarioSummary,
+  WhatIfSimulateResponse,
+} from "./whatifTypes";
 export type { RoutingRuleListParams } from "./routing";
 export type {
   ActorRef,

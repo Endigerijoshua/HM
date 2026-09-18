@@ -247,6 +247,25 @@ Routes under `auth`, `whatif`, `conflicts`, etc. land with P1–P3.
 
 ---
 
+## What-if simulator (P3)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/whatif/scenarios` | List proposed scenarios (DRAFT) |
+| `GET` | `/api/v1/whatif/scenarios/{code}` | Single scenario detail |
+| `POST` | `/api/v1/whatif/scenarios` | Create a deterministic DRAFT scenario from GeoJSON geometry |
+| `POST` | `/api/v1/whatif/simulate` | Simulate live vs. proposed responsibility (`{longitude, latitude, issue_type_code, on_date}`) |
+
+Scenario creation accepts a GeoJSON `geometry_geojson` and stores the derived
+`geometry_wkb` envelope alongside it (shapely path, same as the P1 seed).
+Simulation is **strictly read-only**: it resolves the live responsibility
+(P2 wiring) and the proposed overlay (`HERITAGE_ZONE_EXPANDED`) without ever
+inserting/updating a `jurisdictions`, `jurisdiction_versions`,
+`routing_rules`, or `complaints` row. Applying a scenario is an explicit
+migration flow in a later phase.
+
+---
+
 ## Security posture (P0 baseline)
 
 - Config via environment (`TCIVIC_*`) — no hard-coded secrets; `TCIVIC_ADMIN_TOKEN` is empty by default.
@@ -279,4 +298,6 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   overlap detection, Historical Explorer map, tests.
 - **P2** (done): civic responsibility routing — issue-type registry, temporal routing-rule
   decision table with escalation, point+issue+date resolution, audit trail, Citizen Routing map.
-- **P3**: conflict detector + review workflow, responsibility graph, admin boundary management.
+- **P3** (done): what-if jurisdiction simulator — deterministic DRAFT scenarios with GeoJSON
+  geometry, strictly read-only live-vs-proposed simulation against the heritage overlay.
+  (Conflict detector + review workflow, responsibility graph, admin boundary management remain future.)

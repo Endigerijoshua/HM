@@ -1,11 +1,314 @@
-import { PagePlaceholder } from "../components/Placeholder";
+import { useCallback, useEffect, useState } from "react";
+import { ApiError } from "../api";
+import { simulateWhatIf, fetchWhatIfScenarios } from "../api/whatif";
+import type { WhatIfSimulateResponse, WhatIfScenarioSummary } from "../api/whatifTypes";
+import type { ImpactMetric } from "../api/whatifTypes";
+
+const ON_DATE = "2026-09-18";
+
+interface QuickScenario {
+  label: string;
+  code: string;
+  point: { lon: number; lat: number };
+  issue: string;
+}
+
+/** Deterministic quick flips (seeded demo geometry, no live mutation). */
+const QUICK_SCENARIOS: QuickScenario[] = [
+  {
+    label: "Heritage core · W-05",
+    code: "SC-V3-REZONE",
+    point: { lon: 76.6847217167165, lat: 12.276616211968356 },
+    issue: "heritage_maintenance",
+  },
+  {
+    label: "Ward flip · W-06",
+    code: "SC-V3-REZONE",
+    point: { lon: 76.6627, lat: 12.2313 },
+    issue: "garbage",
+  },
+  {
+    label: "Vanilla · V.V. Mohalla",
+    code: "SC-V3-REZONE",
+    point: { lon: 76.6438, lat: 12.3082 },
+    issue: "heritage_maintenance",
+  },
+];
+
+function metricDelta(metric: ImpactMetric): string {
+  const delta = metric.proposed - metric.current;
+  if (delta === 0) return "unchanged";
+  return delta > 0 ? `+${delta}` : `${delta}`;
+}
 
 export default function WhatIfSimulatorPage() {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ok" } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [scenario, setScenario] = useState<WhatIfScenarioSummary | null>(null);
+  const [lon, setLon] = useState("76.6847217167165");
+  const [lat, setLat] = useState("12.276616211968356");
+  const [issue, setIssue] = useState("heritage_maintenance");
+  const [simulating, setSimulating] = useState(false);
+  const [result, setResult] = useState<WhatIfSimulateResponse | null>(null);
+  const [resultError, setResultError] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState<WhatIfScenarioSummary[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ kind: "loading" });
+    fetchWhatIfScenarios()
+      .then((response) => {
+        if (cancelled) return;
+        setScenarios(response.scenarios);
+        setScenario(response.scenarios[0] ?? null);
+        setState({ kind: "ok" });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            kind: "error",
+            message: error instanceof ApiError ? error.message : "Unknown error",
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const runSimulate = useCallback(
+    (lng: number, latValue: number, issueType: string) => {
+      setSimulating(true);
+      setResultError(null);
+      setResult(null);
+      simulateWhatIf({
+        longitude: lng,
+        latitude: latValue,
+        issue_type_code: issueType,
+        on_date: ON_DATE,
+      })
+        .then((res) => setResult(res))
+        .catch((error: unknown) =>
+          setResultError(error instanceof ApiError ? error.message : "Unknown error"),
+        )
+        .finally(() => setSimulating(false));
+    },
+    [],
+  );
+
+  const handleQuick = (quick: QuickScenario) => {
+    setLon(String(quick.point.lon));
+    setLat(String(quick.point.lat));
+    setIssue(quick.issue);
+    runSimulate(quick.point.lon, quick.point.lat, quick.issue);
+  };
+
   return (
-    <PagePlaceholder
-      title="What-If Simulator"
-      description="Upload or define a proposed boundary, validate it, compare it with the current layout and preview affected wards, roads and complaints - without touching live data."
-      note="P2"
-    />
+    <section className="page">
+      <header className="page-header">
+        <h1>What-If Simulator</h1>
+        <p>
+          Run a proposed boundary against the live layout without touching a single row:
+          the engine resolves responsibility today and under the scenario, then reports
+          every delta — jurisdiction, ward, responsibility and complaint impact. Applying
+          a scenario is an explicit, separate migration flow.
+        </p>
+      </header>
+
+      <div className="gis-toolbar">
+        <div className="gis-quick">
+          {QUICK_SCENARIOS.map((quick) => (
+            <button key={quick.label} className="chip" onClick={() => handleQuick(quick)}>
+              {quick.label}
+            </button>
+          ))}
+          <span className="scenario-select-label">Scenario:</span>
+          <select
+            value={scenario?.code ?? ""}
+            onChange={(event) =>
+              setScenario(scenarios.find((s) => s.code === event.target.value) ?? null)
+            }
+          >
+            {scenarios.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.code} · {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="gis-date">{ON_DATE}</div>
+      </div>
+
+      {state.kind === "error" && <p className="error-text">{state.message}</p>}
+      {state.kind === "loading" && <p className="muted">Loading scenarios…</p>}
+
+      <div className="gis-layout">
+        <div className="card gis-form-card">
+          <h3>Probe point</h3>
+          <label htmlFor="whatif-lon">Longitude</label>
+          <input
+            id="whatif-lon"
+            type="number"
+            step="0.000001"
+            value={lon}
+            onChange={(event) => setLon(event.target.value)}
+          />
+          <label htmlFor="whatif-lat">Latitude</label>
+          <input
+            id="whatif-lat"
+            type="number"
+            step="0.000001"
+            value={lat}
+            onChange={(event) => setLat(event.target.value)}
+          />
+          <label htmlFor="whatif-issue">Issue</label>
+          <select id="whatif-issue" value={issue} onChange={(event) => setIssue(event.target.value)}>
+            <option value="heritage_maintenance">Heritage maintenance</option>
+            <option value="garbage">Garbage</option>
+            <option value="pothole">Pothole</option>
+            <option value="construction_waste">Construction waste</option>
+          </select>
+          <button
+            disabled={simulating || state.kind !== "ok"}
+            onClick={() => {
+              const lngN = Number(lon);
+              const latN = Number(lat);
+              if (Number.isFinite(lngN) && Number.isFinite(latN)) runSimulate(lngN, latN, issue);
+            }}
+          >
+            {simulating ? "Simulating…" : "Simulate"}
+          </button>
+          <p className="muted">Strictly read-only: no live jurisdiction is mutated.</p>
+        </div>
+
+        <div className="card gis-result-card">
+          <h3>Simulation result</h3>
+          {simulating && <p className="muted">Simulating responsibility…</p>}
+          {resultError && <p className="error-text">{resultError}</p>}
+          {!simulating && !resultError && !result && (
+            <p className="muted">
+              Pick a quick flip or enter a probe point to simulate a what-if.
+            </p>
+          )}
+          {!simulating && !resultError && result && <SimulationResultView result={result} />}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SimulationResultView({ result }: { result: WhatIfSimulateResponse }) {
+  return (
+    <div className="whatif-result">
+      <div className="whatif-head">
+        <code className="whatif-scenario">{result.scenario_code}</code>
+        <span className={`result-status ${result.in_proposed_geometry ? "ok-tag" : "muted-tag"}`}>
+          {result.in_proposed_geometry ? "IN PROPOSED" : "OUTSIDE PROPOSAL"}
+        </span>
+      </div>
+
+      <dl className="kv">
+        <div>
+          <dt>Scenario</dt>
+          <dd>{result.scenario_name}</dd>
+        </div>
+        <div>
+          <dt>On date</dt>
+          <dd>{result.on_date}</dd>
+        </div>
+        <div>
+          <dt>Ward (current)</dt>
+          <dd>
+            {result.current.ward_code ?? "—"} · {result.current.ward_name ?? ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Authority (current)</dt>
+          <dd>
+            {result.current.authority?.code ?? "—"} · {result.current.authority?.name ?? ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Department</dt>
+          <dd>
+            {result.current.department?.code ?? "—"} · {result.current.department?.name ?? ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Service</dt>
+          <dd>
+            {result.current.service?.code ?? "—"} · {result.current.service?.name ?? ""}
+          </dd>
+        </div>
+      </dl>
+
+      {result.proposed && (
+        <>
+          <h4>Proposed routing</h4>
+          <dl className="kv">
+            <div>
+              <dt>Authority (proposed)</dt>
+              <dd>
+                {result.proposed.authority?.code ?? "—"} · {result.proposed.authority?.name ?? ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Department (proposed)</dt>
+              <dd>
+                {result.proposed.department?.code ?? "—"} · {result.proposed.department?.name ?? ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Service (proposed)</dt>
+              <dd>
+                {result.proposed.service?.code ?? "—"} · {result.proposed.service?.name ?? ""}
+              </dd>
+            </div>
+          </dl>
+        </>
+      )}
+
+      {result.impact.length > 0 && (
+        <div className="impact-block">
+          <h4>Impact</h4>
+          <table className="impact-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Current</th>
+                <th>Proposed</th>
+                <th>Delta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.impact.map((metric) => (
+                <tr key={metric.label}>
+                  <td>{metric.label}</td>
+                  <td>{metric.current}</td>
+                  <td>{metric.proposed}</td>
+                  <td>{metricDelta(metric)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted">
+            {result.affected_complaint_count} complaint{result.affected_complaint_count === 1 ? "" : "s"} affected ·{" "}
+            {result.responsibility_deltas.length} responsibility delta{result.responsibility_deltas.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      )}
+
+      {result.potential_conflicts.length > 0 && (
+        <div className="conflict-box">
+          <h4>Potential conflicts</h4>
+          <ul>
+            {result.potential_conflicts.map((c) => (
+              <li key={c}>
+                <code>{c}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
