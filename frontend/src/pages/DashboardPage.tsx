@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { ApiHealth } from "../api";
 import { ApiError, fetchHealth } from "../api";
 
 const MODULES = [
-  { name: "Citizen Routing", phase: "P1", status: "Planned" },
-  { name: "Historical Explorer", phase: "P1", status: "Planned" },
-  { name: "What-If Simulator", phase: "P2", status: "Planned" },
-  { name: "Complaint Migration", phase: "P2", status: "Planned" },
-  { name: "Responsibility Conflicts", phase: "P3", status: "Planned" },
-  { name: "Responsibility Graph", phase: "P3", status: "Planned" },
-  { name: "Admin Boundary Management", phase: "P1-P3", status: "Planned" },
+  { name: "P1 · GIS / Temporal Jurisdiction", to: "/history", phase: "P1", status: "IMPLEMENTED" },
+  { name: "P2 · Citizen Routing", to: "/route", phase: "P2", status: "IMPLEMENTED" },
+  { name: "P3 · What-If Simulator", to: "/whatif", phase: "P3", status: "IMPLEMENTED" },
+  { name: "P4 · Complaint Migration Preview", to: "/migrations", phase: "P4", status: "IMPLEMENTED" },
+  { name: "P5 · Responsibility Conflicts", to: "/conflicts", phase: "P5", status: "IMPLEMENTED" },
+  { name: "P6 · Responsibility Graph", to: "/graph", phase: "P6", status: "IMPLEMENTED" },
+  { name: "P7 · Historical Replay", to: "/replay", phase: "P7", status: "IMPLEMENTED" },
+];
+
+const PIPELINE = [
+  { label: "LOCATION", hint: "lat, lng" },
+  { label: "JURISDICTION", hint: "versioned boundary" },
+  { label: "AUTHORITY", hint: "who owns it" },
+  { label: "DEPARTMENT", hint: "who runs it" },
+  { label: "SERVICE", hint: "the SLA" },
+  { label: "ESCALATION", hint: "what happens next" },
 ];
 
 type HealthState =
@@ -44,8 +54,10 @@ export default function DashboardPage() {
       <header className="page-header">
         <h1>Dashboard</h1>
         <p>
-          Deterministic, explainable civic routing across versioned jurisdiction
-          boundaries that change over time.
+          One deterministic explainable pipeline decides who is responsible for
+          an issue at a location on a date — jurisdiction versions and routing
+          rules change over time, and this twin replays, simulates and previews
+          every consequence.
         </p>
       </header>
 
@@ -71,28 +83,55 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <h3>Core idea</h3>
-          <p>
-            Responsible entity = f(lat, lng, issue, date, boundary version, rules).
+          <h3>Core concept</h3>
+          <div className="concept-formula">
+            Responsible Entity =
+            <br />
+            <span className="concept-term">Location</span> +{" "}
+            <span className="concept-term">Issue</span> +{" "}
+            <span className="concept-term">Date</span>
+            <br />
+            + <span className="concept-term">Jurisdiction Version</span> +{" "}
+            <span className="concept-term">Rules</span>
+          </div>
+          <p className="muted">
+            Change the date or the boundary version and the same coordinate can
+            be someone else's responsibility — the Historical Replay page makes
+            that transition explicit.
           </p>
-          <p>
-            P0 provides the temporal, versioned data foundation and the
-            GIS abstraction. Routing, what-if and migration engines arrive in
-            later phases.
-          </p>
+          <Link to="/route" className="btn btn-primary">
+            Start Demo → Citizen Routing
+          </Link>
         </div>
       </div>
 
-      <h2 className="section-title">Module roadmap</h2>
+      <h2 className="section-title">Responsibility pipeline</h2>
+      <div className="pipeline">
+        {PIPELINE.map((step, index) => (
+          <div key={step.label} className="pipeline-step">
+            <div className={`resp-graph-node resp-graph-node-${step.label.toLowerCase()}`}>
+              <span className="resp-graph-node-type">{step.label}</span>
+              <span className="resp-graph-node-label">{step.hint}</span>
+            </div>
+            {index < PIPELINE.length - 1 && (
+              <div className="pipeline-arrow" aria-hidden="true">
+                ↓
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <h2 className="section-title">Implemented modules</h2>
       <div className="card-grid">
         {MODULES.map((module) => (
-          <div key={module.name} className="card small">
+          <Link key={module.name} to={module.to} className="card small module-card">
             <div className="module-head">
               <span className="module-name">{module.name}</span>
-              <span className="phase">{module.status}</span>
+              <span className="implemented-badge">{module.status}</span>
             </div>
-            <span className="muted">Target phase {module.phase}</span>
-          </div>
+            <span className="muted">Phase {module.phase} · live backend</span>
+          </Link>
         ))}
       </div>
     </section>

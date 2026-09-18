@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api";
 import {
   fetchAreas,
@@ -31,6 +32,7 @@ type LoadState =
   | { kind: "error"; message: string };
 
 export default function HistoricalExplorerPage() {
+  const [searchParams] = useSearchParams();
   const [onDate, setOnDate] = useState(DEFAULT_DATE);
   const [jurisdictions, setJurisdictions] = useState<JurisdictionSummary[]>([]);
   const [areas, setAreas] = useState<AreaSummary[]>([]);
@@ -113,6 +115,17 @@ export default function HistoricalExplorerPage() {
     runLookup(lat, lng, onDate);
   };
 
+  useEffect(() => {
+    const latParam = Number(searchParams.get("lat"));
+    const lngParam = Number(searchParams.get("lng"));
+    if (Number.isFinite(latParam) && Number.isFinite(lngParam)) {
+      runLookup(latParam, lngParam, DEFAULT_DATE);
+    }
+    // Run once on mount from a deep link (e.g. Citizen Routing → Historical
+    // Explorer). Dependencies are intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const highlightCode = lookup?.jurisdiction?.code ?? null;
 
   return (
@@ -180,10 +193,14 @@ export default function HistoricalExplorerPage() {
         </div>
       </div>
 
-      {probe && !probeLoading && !lookupError && lookup && (
+      {probe && !probeLoading && !lookupError && lookup?.status === "MATCHED" && (
         <p className="muted gis-demohint">
-          Try the flip point (76.6627, 12.2313): it belongs to W-03 under DELIM-2020 but W-01
-          under DELIM-2024 — a single coordinate, two responsible wards across time.
+          Flip point (76.607313, 12.279256): the same coordinate switches boundary
+          version and routing rule between DELIM-2020 and DELIM-2024 (with a{" "}
+          <code>NO_JURISDICTION</code> gap).{" "}
+          <Link to={`/replay?lat=${lookup.lat}&lng=${lookup.lng}&issue=garbage_collection`}>
+            Open it in Historical Replay →
+          </Link>
         </p>
       )}
     </section>
@@ -235,6 +252,15 @@ function LookupResult({ lookup }: { lookup: JurisdictionLookupResult }) {
               <dt>Version status</dt>
               <dd>{lookup.version?.status ?? "—"}</dd>
             </div>
+            {lookup.version && (
+              <div>
+                <dt>Version window</dt>
+                <dd>
+                  {lookup.version.effective_from}
+                  {lookup.version.effective_to ? ` → ${lookup.version.effective_to}` : " → open"}
+                </dd>
+              </div>
+            )}
           </>
         )}
         {lookup.ward && (
@@ -264,6 +290,18 @@ function LookupResult({ lookup }: { lookup: JurisdictionLookupResult }) {
           <dd>{lookup.service_responsibility}</dd>
         </div>
       </dl>
+
+      {lookup.version?.status === "SUPERSEDED" && lookup.version.effective_to && (
+        <div className="boundary-notice">
+          <span className="boundary-badge">BOUNDARY CHANGE</span>
+          <span>
+            This boundary version was superseded on{" "}
+            <strong>{lookup.version.effective_to}</strong> — a newer
+            jurisdiction version replaced it. Slide the date forward to see the
+            new boundaries.
+          </span>
+        </div>
+      )}
 
       {lookup.message && <p className="muted">{lookup.message}</p>}
     </div>

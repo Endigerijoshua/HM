@@ -121,11 +121,12 @@ temporal-civic-dt/
 cd backend
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+.venv\Scripts\python -m uvicorn app.main:app --reload --port 8011
 ```
 
 On startup the app creates the tables (SQLite) and seeds deterministic demo
-data. Open http://localhost:8000/docs for the interactive API.
+data. Open http://127.0.0.1:8011/docs for the interactive API. Port **8011** is
+the development backend the frontend proxy targets by default.
 
 Health check: `GET /api/v1/health`
 
@@ -137,18 +138,33 @@ npm install
 npm run dev
 ```
 
-Vite proxies `/api/*` to `http://localhost:8000`. If your backend runs on a
-different port:
+Open http://localhost:5173. Vite proxies every `/api/*` request to the backend
+(default `http://127.0.0.1:8011`), so the browser only talks to the Vite server
+and the backend never sees CORS.
+
+Backend connection is configured entirely by environment variables (never
+hard-coded in components):
+
+- `VITE_API_BASE_URL` — API base path (default `/api/v1`). Leave as-is when
+  using the Vite proxy or the bundled nginx reverse proxy. Set it to an
+  absolute URL (e.g. `http://127.0.0.1:8011/api/v1`) only if you bypass the
+  proxy.
+- `VITE_DEV_PROXY_TARGET` — dev-server proxy target (default
+  `http://127.0.0.1:8011`). Override when the backend runs on another port:
 
 ```powershell
 $env:VITE_DEV_PROXY_TARGET="http://localhost:8010"; npm run dev
 ```
 
+Copy `frontend/.env.example` to `frontend/.env` to persist overrides. The
+dashboard card and the sidebar dot both surface backend health via
+`GET /api/v1/health`.
+
 ### Tests
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest          # 158 tests (P0 health/errors + P1 GIS + P2 routing)
+.venv\Scripts\python -m pytest   # 160 tests: 151 passing + 9 known pre-existing failures
 ```
 
 Frontend static checks: `npm run typecheck` / `npm run build`.
@@ -418,6 +434,60 @@ Verified examples against the seed:
 
 ---
 
+## Complete frontend integration (P8)
+
+Every completed capability (P0–P7) is exposed through one coherent web
+application; all pages call the real backend — no placeholders remain.
+
+| Page | Route | Backend API |
+| --- | --- | --- |
+| Dashboard | `/` | `GET /health` |
+| Citizen Routing | `/route` | `POST /routing/resolve`, `GET /graph/resolve`, `/gis/*`, `/routing/*` |
+| Historical Explorer | `/history` | `GET /gis/jurisdictions`, `POST /gis/lookup`, manual version window + `SUPERSEDED` boundary callout |
+| Historical Replay | `/replay` | `GET /replay/point` |
+| What-If Simulator | `/whatif` | `GET /whatif/scenarios`, `POST /whatif/simulate` |
+| Complaint Migration | `/migrations` | `GET /whatif/scenarios/{code}/migration-preview` |
+| Responsibility Conflicts | `/conflicts` | `GET /conflicts` |
+| Responsibility Graph | `/graph` | `GET /graph/resolve` |
+
+Highlights:
+
+- **Dashboard** — accurate `IMPLEMENTED` module grid (P1–P7), the core formula
+  *Responsible Entity = Location + Issue + Date + Jurisdiction Version + Rules*,
+  a visual `LOCATION → JURISDICTION → AUTHORITY → DEPARTMENT → SERVICE →
+  ESCALATION` pipeline, a backend-health readout, and a **Start Demo** button
+  into Citizen Routing.
+- **Historical Replay** — a timeline of `ReplayPeriod` cards with summary chips
+  (days / periods / jurisdiction changes) and an explicit **BOUNDARY CHANGE**
+  marker between periods that lists exactly what changed (jurisdiction, version,
+  rule, authority, status).
+- **Citizen Routing → replay/explorer** — after routing, "Explore this location
+  historically" deep-links the same coordinate + issue into Historical Replay,
+  and "Open in Historical Explorer" deep-links it into the map (both pages read
+  `?lat&lng` / `?issue` query params).
+- **What-If Simulator** — before/after cards (Current boundary → Proposed
+  boundary), impact table, potential conflicts and a prominent **SIMULATION
+  ONLY · NO LIVE JURISDICTION DATA MODIFIED** ribbon.
+- **Complaint Migration** — scenario picker, affected-complaint count and an
+  `OLD → NEW` migration table (jurisdiction / authority / department / service
+  before and after) under a **READ-ONLY PREVIEW** ribbon.
+- **Responsibility Conflicts** — summary counters computed only from the real
+  conflict rows (by type, severity and status) plus a compact table.
+- **Responsibility Graph** — dedicated page reusing the same graph renderer as
+  Citizen Routing.
+- **Error handling** — every API-driven page handles loading, backend
+  unreachable, invalid coordinates, invalid dates, no jurisdiction, unresolved
+  responsibility and empty results without ever exposing a raw stack trace.
+
+The development backend runs on http://127.0.0.1:8011 and the Vite dev proxy
+defaults to it; the backend URL is configured with `VITE_API_BASE_URL` /
+`VITE_DEV_PROXY_TARGET` (see "Running locally"). The seed's stale
+`(76.6627, 12.2313)` "W-03 → W-01" flip-point claim was corrected in the app to
+the verified flip coordinate `(76.60731308845853, 12.279255877741852)`
+(version/rule flip, ward stays W-01).
+
+---
+
 ## Security posture (P0 baseline)
 
 - Config via environment (`TCIVIC_*`) — no hard-coded secrets; `TCIVIC_ADMIN_TOKEN` is empty by default.
@@ -469,3 +539,10 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   replay of one coordinate + issue across a date range via P2, collapsing
   identical outcomes into periods with explicit boundary transitions and
   closed-open `[start, end)` semantics.
+- **P8** (done): complete frontend integration — every P0–P7 capability exposed
+  through one web app (dashboard with pipeline, replay timeline, what-if
+  before/after simulation, read-only migration preview, conflict tables,
+  responsibility graph), dev backend default `http://127.0.0.1:8011`, backend
+  URL configurable via `VITE_API_BASE_URL` / `VITE_DEV_PROXY_TARGET`.
+  (Applying migrations to live isn't implemented — the migration page is a
+  read-only preview by design.)

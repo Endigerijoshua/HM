@@ -5,6 +5,7 @@ import CitizenRoutingPage from "./pages/CitizenRoutingPage";
 import ComplaintMigrationPage from "./pages/ComplaintMigrationPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistoricalExplorerPage from "./pages/HistoricalExplorerPage";
+import HistoricalReplayPage from "./pages/HistoricalReplayPage";
 import ResponsibilityConflictsPage from "./pages/ResponsibilityConflictsPage";
 import ResponsibilityGraphPage from "./pages/ResponsibilityGraphPage";
 import WhatIfSimulatorPage from "./pages/WhatIfSimulatorPage";
@@ -16,6 +17,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="route" element={<CitizenRoutingPage />} />
         <Route path="history" element={<HistoricalExplorerPage />} />
+        <Route path="replay" element={<HistoricalReplayPage />} />
         <Route path="whatif" element={<WhatIfSimulatorPage />} />
         <Route path="migrations" element={<ComplaintMigrationPage />} />
         <Route path="conflicts" element={<ResponsibilityConflictsPage />} />

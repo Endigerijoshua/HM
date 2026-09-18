@@ -22,10 +22,10 @@ const QUICK_SCENARIOS: QuickScenario[] = [
     issue: "heritage_maintenance",
   },
   {
-    label: "Ward flip · W-06",
+    label: "Flip point · V1/V2",
     code: "SC-V3-REZONE",
-    point: { lon: 76.6627, lat: 12.2313 },
-    issue: "garbage",
+    point: { lon: 76.60731308845853, lat: 12.279255877741852 },
+    issue: "garbage_collection",
   },
   {
     label: "Vanilla · V.V. Mohalla",
@@ -112,6 +112,7 @@ export default function WhatIfSimulatorPage() {
           every delta — jurisdiction, ward, responsibility and complaint impact. Applying
           a scenario is an explicit, separate migration flow.
         </p>
+        <div className="sim-only-badge">SIMULATION ONLY · NO LIVE JURISDICTION DATA MODIFIED</div>
       </header>
 
       <div className="gis-toolbar">
@@ -163,7 +164,8 @@ export default function WhatIfSimulatorPage() {
           <label htmlFor="whatif-issue">Issue</label>
           <select id="whatif-issue" value={issue} onChange={(event) => setIssue(event.target.value)}>
             <option value="heritage_maintenance">Heritage maintenance</option>
-            <option value="garbage">Garbage</option>
+            <option value="garbage_collection">Garbage collection</option>
+            <option value="garbage">Garbage (legacy)</option>
             <option value="pothole">Pothole</option>
             <option value="construction_waste">Construction waste</option>
           </select>
@@ -196,6 +198,25 @@ export default function WhatIfSimulatorPage() {
   );
 }
 
+function Strip({ label, code, name, status }: { label: string; code: string | null; name: string | null; status?: string }) {
+  return (
+    <div className="strip-item">
+      <span className="strip-label">{label}</span>
+      <span className="strip-value">
+        {code ? (
+          <>
+            <code>{code}</code>
+            {name ? <em> · {name}</em> : null}
+          </>
+        ) : (
+          "—"
+        )}
+      </span>
+      {status ? <span className="strip-status">{status}</span> : null}
+    </div>
+  );
+}
+
 function SimulationResultView({ result }: { result: WhatIfSimulateResponse }) {
   return (
     <div className="whatif-result">
@@ -215,57 +236,41 @@ function SimulationResultView({ result }: { result: WhatIfSimulateResponse }) {
           <dt>On date</dt>
           <dd>{result.on_date}</dd>
         </div>
-        <div>
-          <dt>Ward (current)</dt>
-          <dd>
-            {result.current.ward_code ?? "—"} · {result.current.ward_name ?? ""}
-          </dd>
-        </div>
-        <div>
-          <dt>Authority (current)</dt>
-          <dd>
-            {result.current.authority?.code ?? "—"} · {result.current.authority?.name ?? ""}
-          </dd>
-        </div>
-        <div>
-          <dt>Department</dt>
-          <dd>
-            {result.current.department?.code ?? "—"} · {result.current.department?.name ?? ""}
-          </dd>
-        </div>
-        <div>
-          <dt>Service</dt>
-          <dd>
-            {result.current.service?.code ?? "—"} · {result.current.service?.name ?? ""}
-          </dd>
-        </div>
       </dl>
 
-      {result.proposed && (
-        <>
-          <h4>Proposed routing</h4>
-          <dl className="kv">
-            <div>
-              <dt>Authority (proposed)</dt>
-              <dd>
-                {result.proposed.authority?.code ?? "—"} · {result.proposed.authority?.name ?? ""}
-              </dd>
-            </div>
-            <div>
-              <dt>Department (proposed)</dt>
-              <dd>
-                {result.proposed.department?.code ?? "—"} · {result.proposed.department?.name ?? ""}
-              </dd>
-            </div>
-            <div>
-              <dt>Service (proposed)</dt>
-              <dd>
-                {result.proposed.service?.code ?? "—"} · {result.proposed.service?.name ?? ""}
-              </dd>
-            </div>
-          </dl>
-        </>
-      )}
+      <div className="ba-compare">
+        <div className="card ba-card">
+          <h4>
+            Current boundary <span className="muted">(live)</span>
+          </h4>
+          <Strip label="Ward" code={result.current.ward_code} name={result.current.ward_name} status={result.current.status} />
+          <Strip label="Authority" code={result.current.authority?.code ?? null} name={result.current.authority?.name ?? null} />
+          <Strip label="Department" code={result.current.department?.code ?? null} name={result.current.department?.name ?? null} />
+          <Strip label="Service" code={result.current.service?.code ?? null} name={result.current.service?.name ?? null} />
+        </div>
+
+        <div className="ba-arrow">
+          <span aria-hidden="true">↓</span>
+          <span className="muted">SIMULATE</span>
+        </div>
+
+        <div className="card ba-card proposed">
+          <h4>
+            Proposed boundary <span className="muted">(scenario)</span>
+          </h4>
+          {result.proposed ? (
+            <>
+              <Strip label="Ward" code={result.proposed.ward_code} name={result.proposed.ward_name} status={result.proposed.status} />
+              <Strip label="Authority" code={result.proposed.authority?.code ?? null} name={result.proposed.authority?.name ?? null} />
+              <Strip label="Department" code={result.proposed.department?.code ?? null} name={result.proposed.department?.name ?? null} />
+              <Strip label="Service" code={result.proposed.service?.code ?? null} name={result.proposed.service?.name ?? null} />
+              <p className="muted">A change to the right is a migration candidate.</p>
+            </>
+          ) : (
+            <p className="muted">No routing resolves under the proposed boundary.</p>
+          )}
+        </div>
+      </div>
 
       {result.impact.length > 0 && (
         <div className="impact-block">

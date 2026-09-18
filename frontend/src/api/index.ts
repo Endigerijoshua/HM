@@ -43,6 +43,17 @@ export type {
   WhatIfScenarioSummary,
   WhatIfSimulateResponse,
 } from "./whatifTypes";
+export { fetchReplayPoint } from "./replay";
+export type { ReplayPointParams, ReplayPointResponse } from "./replayTypes";
+export type {
+  ReplayActorRef,
+  ReplayPeriod,
+  ReplayStatus,
+} from "./replayTypes";
+export { fetchConflicts } from "./conflicts";
+export type { ConflictListResponse, ConflictActorRef, ResponsibilityConflict } from "./conflictsTypes";
+export { fetchMigrationPreview } from "./migrations";
+export type { MigrationComplaint, MigrationPreviewResponse } from "./migrationTypes";
 export type { RoutingRuleListParams } from "./routing";
 export type {
   ActorRef,

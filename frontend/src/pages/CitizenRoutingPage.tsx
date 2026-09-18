@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, fetchAreas, fetchJurisdictions, fetchRoads } from "../api";
 import type { AreaSummary, JurisdictionSummary, RoadSummary } from "../api/gisTypes";
 import { resolveGraph } from "../api/graph";
@@ -41,9 +42,9 @@ const SCENARIOS = [
     point: { lat: 12.3125, lng: 76.635 },
   },
   {
-    label: "Garbage · flip point",
-    issue: "garbage",
-    point: { lat: 12.2313, lng: 76.6627 },
+    label: "Garbage collection · flip point",
+    issue: "garbage_collection",
+    point: { lat: 12.279255877741852, lng: 76.60731308845853 },
   },
 ];
 
@@ -309,7 +310,25 @@ export default function CitizenRoutingPage() {
               Choose a scenario chip or click a location on the map to route an issue.
             </p>
           )}
-          {!resolving && !resultError && result && <RoutingResultView result={result} />}
+          {!resolving && !resultError && result && (
+            <>
+              <RoutingResultView result={result} />
+              <div className="replay-links">
+                <Link
+                  className="btn btn-outline"
+                  to={`/replay?lat=${result.latitude}&lng=${result.longitude}&issue=${encodeURIComponent(result.issue_type)}&start=2023-01-01&end=2025-01-01`}
+                >
+                  Explore this location historically →
+                </Link>
+                <Link
+                  className="btn btn-outline"
+                  to={`/history?lat=${result.latitude}&lng=${result.longitude}`}
+                >
+                  Open in Historical Explorer
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -376,8 +395,9 @@ export default function CitizenRoutingPage() {
       <p className="muted gis-demohint">
         Tip: the construction-waste scenario on W-05 (V2) deliberately triggers two equal-priority
         jurisdiction rules → <code>RESPONSIBILITY_UNRESOLVED</code>. Try the same issue on any other
-        V2 ward to see it resolve. Replay garbage on the flip point across V1/V2 to watch the rule
-        change from <code>RULE-GARBAGE-HIST</code> (MCC-D-HS) to <code>RULE-GARBAGE</code>.
+        V2 ward to see it resolve. Replay garbage collection on the flip point across V1/V2 to watch
+        the rule change from <code>RULE-GARBAGE-PRE2024</code> (MCC-D-HS) to <code>RULE-GARBAGE-01</code>
+        — Historical Replay renders that boundary transition.
       </p>
     </section>
   );
