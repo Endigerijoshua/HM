@@ -6,11 +6,12 @@ const NAV_ITEMS = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/route", label: "Citizen Routing" },
   { to: "/history", label: "Historical Explorer" },
-  { to: "/replay", label: "Historical Replay" },
   { to: "/whatif", label: "What-If Simulator" },
   { to: "/migrations", label: "Complaint Migration" },
   { to: "/conflicts", label: "Responsibility Conflicts" },
   { to: "/graph", label: "Responsibility Graph" },
+  { to: "/replay", label: "Historical Replay" },
+  { to: "/admin", label: "Admin Boundaries" },
 ];
 
 type BackendState =
@@ -57,7 +58,7 @@ export function Sidebar() {
         <div className="brand-mark" />
         <div>
           <div className="brand-title">TCDT</div>
-          <div className="brand-sub">Civic Jurisdiction Twin</div>
+          <div className="brand-sub">Civic Jurisdiction Digital Twin</div>
         </div>
       </div>
 

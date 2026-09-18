@@ -205,22 +205,7 @@ body {
 .ok-tag {
   color: var(--ok);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* ---- Placeholder ---- */
-.placeholder-card {
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
-  max-width: 680px;
-}
-
-.placeholder-card p {
-  color: var(--ink-muted);
-  line-height: 1.5;
-  margin: 8px 0 16px;
+letter-spacing: 0.05em;
 }
 
 /* ---- GIS explorer ---- */
@@ -1597,4 +1582,451 @@ body {
     transform: rotate(90deg);
     align-self: center;
   }
+}
+
+/* ---- P7 Historical Replay: explorer timeline, inspector, diffs ---- */
+.replay-timeline {
+  flex-direction: row;
+  overflow-x: auto;
+  align-items: stretch;
+  gap: 16px;
+  padding: 4px 2px 18px;
+}
+
+.replay-period {
+  flex: 0 0 330px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.replay-node {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+
+.replay-node:hover {
+  border-color: var(--accent);
+}
+
+.replay-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.replay-node-selected {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.replay-node-year {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.replay-node-range {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.replay-node-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.replay-period-selected {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.15);
+}
+
+.replay-period .boundary-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 5px 8px;
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+  border-radius: 8px;
+}
+
+.replay-period .boundary-badge {
+  justify-self: auto;
+  align-self: flex-start;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+
+.replay-period .boundary-changes,
+.replay-period .boundary-date {
+  justify-self: auto;
+  grid-column: auto;
+  font-size: 11px;
+}
+
+.replay-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replay-inspector-head h4 {
+  margin: 0 0 2px;
+}
+
+.replay-inspector-head p.muted {
+  margin: 0;
+}
+
+.replay-nostate {
+  border: 1px dashed rgba(100, 116, 139, 0.5);
+  background: rgba(100, 116, 139, 0.05);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.replay-nostate-unresolved {
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(220, 38, 38, 0.05);
+}
+
+.what-changed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.what-changed-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.what-changed-field {
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.what-changed-old {
+  color: #b45309;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.what-changed-arrow {
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.what-changed-new {
+  color: var(--ink);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-audit {
+  margin-top: 16px;
+}
+
+.replay-audit h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 980px) {
+  .replay-timeline {
+    flex-direction: column;
+    overflow: visible;
+    align-items: stretch;
+  }
+
+  .replay-period {
+    flex: none;
+    width: 100%;
+  }
+
+  .what-changed-row {
+    grid-template-columns: 90px minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+}
+/* ---- Step 4 � product integration ---- */
+.hero-title {
+  font-size: 32px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.hero-subtitle {
+  font-size: 15px;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0 8px;
+}
+
+.btn-lg {
+  padding: 12px 26px;
+  font-size: 15px;
+}
+
+.workflow-note {
+  margin: -6px 0 10px;
+}
+
+.workflow-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  overflow-x: auto;
+}
+
+.resp-graph-node-rule {
+  border-top: 3px solid #0e7490;
+}
+
+.resp-graph-node-boundary-change {
+  border-top: 3px solid #be123c;
+}
+
+.resp-graph-node-what-if {
+  border-top: 3px solid #7c3aed;
+}
+
+.resp-graph-node-affected-complaints {
+  border-top: 3px solid #4f46e5;
+}
+
+.resp-graph-node-responsibility-conflicts {
+  border-top: 3px solid #b45309;
+}
+
+.resp-graph-node-historical-replay {
+  border-top: 3px solid #0f766e;
+}
+
+.demo-flow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: rgba(15, 118, 110, 0.06);
+  border: 1px solid rgba(15, 118, 110, 0.28);
+  border-radius: var(--radius);
+}
+
+.demo-flow-badge {
+  background: var(--accent);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.demo-flow-intro {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.demo-flow-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.demo-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.demo-flow-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.demo-flow-link:hover {
+  border-color: var(--accent);
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.demo-flow-link.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.demo-flow-arrow {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.gis-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.gis-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gis-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.admin-compare-form {
+  align-items: flex-start;
+}
+
+.admin-compare-note {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.admin-summary {
+  margin: 0 0 14px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-table th {
+  text-align: left;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.admin-table tbody tr {
+  cursor: pointer;
+}
+
+.admin-table tbody tr:hover td {
+  background: rgba(15, 118, 110, 0.05);
+}
+
+.admin-table tbody tr.selected td {
+  background: rgba(15, 118, 110, 0.10);
+}
+
+.admin-juris-code,
+.admin-juris-name {
+  display: block;
+}
+
+.admin-juris-code {
+  font-weight: 700;
+}
+
+.admin-juris-name {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.admin-version-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-version-code {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-version-window {
+  color: var(--ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.admin-superseded {
+  color: var(--bad);
+  font-size: 12px;
+}
+
+.boundary-change-badge {
+  display: inline-block;
+  background: rgba(190, 18, 60, 0.10);
+  color: var(--bad);
+  border: 1px solid rgba(190, 18, 60, 0.35);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
 }

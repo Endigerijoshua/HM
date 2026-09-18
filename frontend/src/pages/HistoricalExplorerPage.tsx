@@ -15,6 +15,7 @@ import type {
   RoadSummary,
 } from "../api/gisTypes";
 import { JurisdictionMap } from "../components/map/JurisdictionMap";
+import { MapLegend } from "../components/map/MapLegend";
 
 const MIN_DATE = "2020-01-01";
 const MAX_DATE = "2026-12-31";
@@ -177,6 +178,7 @@ export default function HistoricalExplorerPage() {
             activeVersionLabels={activeVersions}
             onSelect={handleSelect}
           />
+          <MapLegend />
           <p className="muted gis-click-hint">
             Click anywhere on the map to run a temporal lookup for that point on {onDate}.
           </p>

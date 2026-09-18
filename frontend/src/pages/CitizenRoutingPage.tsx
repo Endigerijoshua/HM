@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, fetchAreas, fetchJurisdictions, fetchRoads } from "../api";
 import type { AreaSummary, JurisdictionSummary, RoadSummary } from "../api/gisTypes";
 import { resolveGraph } from "../api/graph";
@@ -14,6 +14,8 @@ import type {
 import { ResponsibilityGraph } from "../components/graph/ResponsibilityGraph";
 import { JurisdictionMap } from "../components/map/JurisdictionMap";
 import { RoutingExplanation } from "../components/routing/RoutingExplanation";
+import { DemoFlowBar } from "../components/DemoFlowBar";
+import { MapLegend } from "../components/map/MapLegend";
 
 const MIN_DATE = "2020-01-01";
 const MAX_DATE = "2026-12-31";
@@ -206,6 +208,24 @@ export default function CitizenRoutingPage() {
     runResolve(lat, lng, issueType, onDate);
   };
 
+  const [searchParams] = useSearchParams();
+  const demoMode = searchParams.get("demo") === "1";
+  const demoRun = useRef(false);
+
+  useEffect(() => {
+    if (demoRun.current || !demoMode) return;
+    const lat = Number(searchParams.get("lat"));
+    const lng = Number(searchParams.get("lng"));
+    const issue = searchParams.get("issue");
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !issue) return;
+    demoRun.current = true;
+    setIssueType(issue);
+    const date = searchParams.get("date");
+    if (date) setOnDate(date);
+    runResolve(lat, lng, issue, date ?? onDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode]);
+
   const handleScenario = (issue: string, point: { lat: number; lng: number }) => {
     setIssueType(issue);
     runResolve(point.lat, point.lng, issue, onDate);
@@ -224,6 +244,8 @@ export default function CitizenRoutingPage() {
           with a step-by-step escalation path and a "why this route?" explanation.
         </p>
       </header>
+
+      {demoMode && <DemoFlowBar active="route" />}
 
       <div className="gis-toolbar">
         <div className="gis-toolbar-item">
@@ -295,6 +317,7 @@ export default function CitizenRoutingPage() {
             activeVersionLabels={activeVersions}
             onSelect={handleSelect}
           />
+          <MapLegend />
           <p className="muted gis-click-hint">
             {issueType
               ? `Click anywhere on the map to route "${issueType}" on ${onDate}.`

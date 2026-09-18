@@ -19,6 +19,7 @@ import type {
 } from "../api/whatifTypes";
 import type { RoutingResult } from "../api/routingTypes";
 import { JurisdictionMap } from "../components/map/JurisdictionMap";
+import { MapLegend } from "../components/map/MapLegend";
 
 const ON_DATE = "2026-09-18";
 
@@ -284,6 +285,7 @@ export default function WhatIfSimulatorPage() {
               onSelect={handleSelect}
             />
           )}
+          {gisState.kind === "ok" && <MapLegend showProposed={showProposed != null} />}
 
           <p className="muted gis-click-hint">
             {view === "current" && "Live layout. Click the map to set a probe point, then press Simulate."}
