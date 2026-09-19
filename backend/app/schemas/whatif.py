@@ -125,6 +125,7 @@ class WhatIfSimulateResponse(BaseModel):
     proposed: RoutingResult | None = None
     responsibility_deltas: list[ResponsibilityDelta] = Field(default_factory=list)
     affected_complaint_count: int
+    responsibility_change_count: int = 0
     impact: list[ImpactMetric] = Field(default_factory=list)
     potential_conflicts: list[str] = Field(default_factory=list)
 
@@ -169,6 +170,7 @@ class MigrationComplaintPreview(BaseModel):
     proposed_service_code: str | None = None
     proposed_service_name: str | None = None
     migration_required: bool
+    responsibility_changed: bool
     explanation: str
 
 
@@ -180,4 +182,5 @@ class MigrationPreviewResponse(BaseModel):
     preview_date: date
     total_open_complaints: int
     affected_count: int
+    responsibility_change_count: int = 0
     complaints: list[MigrationComplaintPreview] = Field(default_factory=list)

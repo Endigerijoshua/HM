@@ -163,7 +163,10 @@ class WhatIfSimulationService:
         )
 
         candidates, _ = self._migration_candidates(boundary, on_date)
-        affected_count = sum(1 for row in candidates if row["migrated"])
+        affected_count = sum(1 for row in candidates if row["in_proposed"])
+        responsibility_change_count = sum(
+            1 for row in candidates if row["responsibility_changed"]
+        )
 
         return WhatIfSimulateResponse(
             scenario_code=scenario.code if scenario else "SC-V3-REZONE",
@@ -176,8 +179,11 @@ class WhatIfSimulationService:
             proposed=proposed,
             responsibility_deltas=deltas,
             affected_complaint_count=affected_count,
+            responsibility_change_count=responsibility_change_count,
             impact=self._impact(inside=inside, boundary=boundary),
-            potential_conflicts=self._potential_conflicts(deltas=deltas, inside=inside),
+            potential_conflicts=self._potential_conflicts(
+                current=current, proposed=proposed
+            ),
         )
 
     def impact(self, scenario_code: str) -> WhatIfImpactResponse:
@@ -207,22 +213,30 @@ class WhatIfSimulationService:
             scenario_name=scenario.name,
             affected_complaints=complaint_refs,
             impact=self._impact(inside=True, boundary=boundary),
-            potential_conflicts=(
-                ["HERITAGE"] if complaint_refs else ["NONE"]
+            potential_conflicts=self._potential_conflicts(
+                current=None, proposed=None
             ),
         )
 
     def migration_preview(
         self, scenario_code: str, *, on_date: date = PREVIEW_DATE
     ) -> MigrationPreviewResponse:
-        """Read-only P4 preview: which OPEN complaints change responsibility.
+        """Read-only P4 preview: which OPEN complaints would be affected.
 
         Every OPEN complaint is resolved twice against the same (point, issue,
         preview date) triple — once live (P2 routing) and once under the
-        scenario's proposed boundary (its stored WKB geometry). A complaint is
-        a migration candidate only when its point lies inside the proposed
-        boundary and its proposed heritage-precinct responsibility differs from
-        the live responsibility. Nothing is inserted, updated or committed.
+        scenario's proposed boundary (its stored WKB geometry). Each row reports
+        two independent flags:
+
+        * ``in_proposed_boundary`` — the point lies inside the proposed
+          boundary ("affected", purely geographic); and
+        * ``migration_required`` — that plus at least one of jurisdiction,
+          department or service changes.
+
+        ``affected_count`` counts spatial membership; ``responsibility_change_count``
+        counts rows whose department or service actually changes, which is
+        independent of ``migration_required``. Nothing is inserted, updated or
+        committed.
         """
         scenario = self._db.scalar(
             select(SimulationScenario).where(
@@ -242,6 +256,7 @@ class WhatIfSimulationService:
                 current=row["current"],
                 proposed=row["proposed"],
                 migrated=row["migrated"],
+                responsibility_changed=row["responsibility_changed"],
                 scenario_code=scenario_code,
                 issue_names=issue_names,
             )
@@ -252,7 +267,10 @@ class WhatIfSimulationService:
             scenario_name=scenario.name,
             preview_date=on_date,
             total_open_complaints=len(candidates),
-            affected_count=sum(1 for row in candidates if row["migrated"]),
+            affected_count=sum(1 for row in candidates if row["in_proposed"]),
+            responsibility_change_count=sum(
+                1 for row in candidates if row["responsibility_changed"]
+            ),
             complaints=rows,
         )
 
@@ -266,9 +284,11 @@ class WhatIfSimulationService:
         Returns ``(rows, heritage)`` where each row is a dict with the
         complaint, its spatial membership inside the proposed boundary, its
         live (before) responsibility and — when inside — the heritage-precinct
-        proposed (after) responsibility. Purely read-only. Shared by
+        proposed (after) responsibility, plus two flags: ``migrated`` (any of
+        jurisdiction / department / service changes) and ``responsibility_changed``
+        (department or service changes). Purely read-only. Shared by
         ``migration_preview`` and ``simulate`` so the two always report the
-        same affected count for the same scenario and date.
+        same counts for the same scenario and date.
         """
         if boundary is None:
             complaints: list[Complaint] = []
@@ -302,6 +322,9 @@ class WhatIfSimulationService:
                     "current": current,
                     "proposed": proposed,
                     "migrated": self._requires_migration(current, in_proposed, proposed),
+                    "responsibility_changed": self._responsibility_changed(
+                        current, proposed
+                    ),
                 }
             )
         return rows, heritage
@@ -382,6 +405,28 @@ class WhatIfSimulationService:
             != (proposed["service"].code if proposed["service"] else None)
         )
 
+    @staticmethod
+    def _responsibility_changed(
+        current: RoutingResult, proposed: dict | None
+    ) -> bool:
+        """True when the proposal changes the point's civic responsibility.
+
+        Civic responsibility here means the department + service that resolves
+        the issue. A complaint can be geographically affected (inside the
+        proposed boundary) and even move to a new jurisdiction while the
+        department and service that handle it stay the same — that is NOT a
+        responsibility change. Independent of ``_requires_migration``, which
+        also counts jurisdiction moves.
+        """
+        if proposed is None:
+            return False
+        return (
+            (current.department.code if current.department else None)
+            != (proposed["department"].code if proposed["department"] else None)
+            or (current.service.code if current.service else None)
+            != (proposed["service"].code if proposed["service"] else None)
+        )
+
     def _preview_row(
         self,
         *,
@@ -390,6 +435,7 @@ class WhatIfSimulationService:
         current: RoutingResult,
         proposed: dict | None,
         migrated: bool,
+        responsibility_changed: bool,
         scenario_code: str,
         issue_names: dict,
     ) -> MigrationComplaintPreview:
@@ -444,6 +490,7 @@ class WhatIfSimulationService:
             proposed_service_code=proposed_fields["service_code"],
             proposed_service_name=proposed_fields["service_name"],
             migration_required=migrated,
+            responsibility_changed=responsibility_changed,
             explanation=explanation,
         )
 
@@ -621,11 +668,25 @@ class WhatIfSimulationService:
         ]
 
     def _potential_conflicts(
-        self, *, deltas: list[ResponsibilityDelta], inside: bool
+        self, *, current: RoutingResult | None, proposed: RoutingResult | None
     ) -> list[str]:
-        if deltas:
-            return ["HERITAGE"]
-        return ["HERITAGE" if inside else "NONE"]
+        """Genuine conflict markers derived from the routing outcomes.
+
+        A marker is emitted only when a resolution is genuinely ambiguous — an
+        unresolved responsibility or conflicting rules — not merely because the
+        proposed boundary changes which department/service handles a point. The
+        heritage scenario has exactly one rule per issue, so its simulations
+        report no conflicts.
+        """
+        markers: list[str] = []
+        for result in (current, proposed):
+            if result is None:
+                continue
+            if result.status == RoutingStatus.RESPONSIBILITY_UNRESOLVED:
+                markers.append(RoutingStatus.RESPONSIBILITY_UNRESOLVED)
+            for code in result.conflict_rule_codes or []:
+                markers.append(f"RULE:{code}")
+        return sorted(set(markers))
 
     def _scenario_payload(self, scenario: SimulationScenario) -> WhatIfScenarioResponse:
         return WhatIfScenarioResponse(

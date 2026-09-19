@@ -30,6 +30,7 @@ export interface MigrationComplaint {
   proposed_service_code: string | null;
   proposed_service_name: string | null;
   migration_required: boolean;
+  responsibility_changed: boolean;
   explanation: string;
 }
 
@@ -39,5 +40,6 @@ export interface MigrationPreviewResponse {
   preview_date: string;
   total_open_complaints: number;
   affected_count: number;
+  responsibility_change_count: number;
   complaints: MigrationComplaint[];
 }

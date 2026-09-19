@@ -276,3 +276,69 @@ def test_f_preview_and_simulate_agree_on_affected(client) -> None:
     assert sim["proposed"]["jurisdiction_code"] == row["proposed_jurisdiction_code"]
     assert sim["current"]["jurisdiction_code"] == row["current_jurisdiction_code"]
     assert len(sim["responsibility_deltas"]) > 0
+
+
+def test_g_affected_vs_responsibility_change_counts(client) -> None:
+    """affected_count is spatial; responsibility_change_count is dept/service.
+
+    Three OPEN complaints fall inside the proposed boundary, but only two
+    change department/service responsibility. C-1009 moves jurisdiction
+    (W-05 -> HER-01) while its department/service stay heritage-owned, so it
+    is affected yet NOT counted as a responsibility change.
+    """
+    preview = client.get(
+        "/api/v1/whatif/scenarios/SC-V3-REZONE/migration-preview"
+    ).json()
+    assert preview["total_open_complaints"] == 7
+    assert preview["affected_count"] == 3
+    assert preview["responsibility_change_count"] == 2
+
+    rows = {row["public_ref"]: row for row in preview["complaints"]}
+    for ref in ("C-1002", "C-1007", "C-1009"):
+        assert rows[ref]["in_proposed_boundary"] is True
+    for ref in ("C-1002", "C-1007"):
+        assert rows[ref]["responsibility_changed"] is True
+    # C-1009 stays under MCC-D-HP / SVC-HERITAGE -> not a responsibility change
+    # even though its jurisdiction (and thus migration_required) flips.
+    assert rows["C-1009"]["responsibility_changed"] is False
+    assert rows["C-1009"]["migration_required"] is True
+    assert rows["C-1009"]["current_department_code"] == "MCC-D-HP"
+    assert rows["C-1009"]["proposed_department_code"] == "MCC-D-HP"
+    assert rows["C-1009"]["proposed_service_code"] == rows["C-1009"]["current_service_code"]
+
+    body = _simulate(client, lon=76.638, lat=12.312, issue="heritage_maintenance")
+    assert body["affected_complaint_count"] == 3
+    assert body["responsibility_change_count"] == 2
+
+
+def test_h_responsibility_change_count_matches_preview(client) -> None:
+    """simulate and migration-preview agree on the responsibility-change count.
+
+    The count is a complaint-level stat (how many OPEN complaints change
+    department/service), so it must match the preview exactly and is
+    independent of the probe point's own responsibility deltas.
+    """
+    from app.whatif.whatif_service import PREVIEW_DATE
+
+    preview = client.get(
+        "/api/v1/whatif/scenarios/SC-V3-REZONE/migration-preview"
+    ).json()
+    changed_refs = {
+        row["public_ref"]
+        for row in preview["complaints"]
+        if row["responsibility_changed"]
+    }
+    assert changed_refs == {"C-1002", "C-1007"}
+
+    body = _simulate(
+        client,
+        lon=76.6375,
+        lat=12.3125,
+        issue="water_supply",
+        on_date=PREVIEW_DATE.isoformat(),
+    )
+    assert body["responsibility_change_count"] == preview["responsibility_change_count"]
+    assert body["responsibility_change_count"] == len(changed_refs) == 2
+    # The probe's own mapping deltas are NOT complaint counts.
+    assert body["responsibility_deltas"]
+    assert len(body["responsibility_deltas"]) != body["responsibility_change_count"]

@@ -1389,6 +1389,12 @@ letter-spacing: 0.05em;
   line-height: 1.4;
 }
 
+.impact-subhead {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .whatif-compare {
   margin-top: 16px;
 }
@@ -1490,6 +1496,18 @@ letter-spacing: 0.05em;
   background: rgba(15, 118, 110, 0.06);
   border-radius: 6px;
   padding: 2px 8px;
+}
+
+.complaint-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  border: 1px solid rgba(15, 118, 110, 0.35);
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .delta-rows {

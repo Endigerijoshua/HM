@@ -71,6 +71,7 @@ export interface WhatIfSimulateResponse {
   proposed: RoutingResult | null;
   responsibility_deltas: ResponsibilityDelta[];
   affected_complaint_count: number;
+  responsibility_change_count: number;
   impact: ImpactMetric[];
   potential_conflicts: string[];
 }

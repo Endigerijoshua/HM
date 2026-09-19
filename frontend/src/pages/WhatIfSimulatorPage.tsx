@@ -311,7 +311,8 @@ export default function WhatIfSimulatorPage() {
                 </span>
               ) : null}
               <span>Complaints affected: {result.affected_complaint_count}</span>
-              <span>Responsibility changes: {result.responsibility_deltas.length}</span>
+              <span>Complaints switching responsibility: {result.responsibility_change_count}</span>
+              <span>Probe changes: {result.responsibility_deltas.length}</span>
               <span>Conflicts: {conflictCount(result)}</span>
             </div>
           )}
@@ -385,14 +386,28 @@ export default function WhatIfSimulatorPage() {
 function ResultSummaryCards({ result }: { result: WhatIfSimulateResponse }) {
   const area = areaMetric(result);
   const conflicts = conflictCount(result);
-  const deltas = result.responsibility_deltas.length;
+  const probeChanges = result.responsibility_deltas.length;
   return (
     <div className="impact-cards" aria-label="Simulation result summary">
       <div className="impact-card">
         <span className="impact-card-label">Affected complaints</span>
         <span className="impact-card-value">{result.affected_complaint_count}</span>
         <span className="impact-card-sub">
-          complaints with registered coordinates fall under the proposed boundary
+          complaints whose registered coordinates fall under the proposed boundary
+        </span>
+      </div>
+      <div className="impact-card">
+        <span className="impact-card-label">Responsibility changes</span>
+        <span className="impact-card-value">{result.responsibility_change_count}</span>
+        <span className="impact-card-sub">
+          complaints whose department/service responsibility would change
+        </span>
+      </div>
+      <div className="impact-card">
+        <span className="impact-card-label">Probe responsibility changes</span>
+        <span className="impact-card-value">{probeChanges}</span>
+        <span className="impact-card-sub">
+          assumption changes at this probe point (not complaint counts)
         </span>
       </div>
       {result.in_proposed_geometry && area && (
@@ -404,11 +419,6 @@ function ResultSummaryCards({ result }: { result: WhatIfSimulateResponse }) {
           <span className="impact-card-sub">{deltaText(area.delta, "km²")}</span>
         </div>
       )}
-      <div className="impact-card">
-        <span className="impact-card-label">Responsibility changes</span>
-        <span className="impact-card-value">{deltas}</span>
-        <span className="impact-card-sub">probe-point assumption changes at this location</span>
-      </div>
       <div className="impact-card">
         <span className="impact-card-label">Responsibility conflicts</span>
         <span className="impact-card-value">{conflicts}</span>
@@ -525,6 +535,10 @@ function WhyItMatters({
 }) {
   const area = areaMetric(result);
   const conflicts = conflictCount(result);
+  const affected = result.affected_complaint_count;
+  const changes = result.responsibility_change_count;
+  const total = preview?.total_open_complaints;
+  const withoutResponsibilityChange = affected - changes;
   const points: string[] = [
     `Simulating ${result.scenario_code} · ${result.scenario_name} on ${result.on_date}.`,
     `The probe point (${result.current.latitude.toFixed(4)}, ${result.current.longitude.toFixed(4)}) is ${
@@ -536,11 +550,18 @@ function WhyItMatters({
       `Proposed precinct area changes from ${area.current} km² to ${area.proposed} km² (${deltaText(area.delta, "km²")}).`,
     );
   }
-  if (result.affected_complaint_count > 0) {
+  if (affected > 0) {
     points.push(
-      `${result.affected_complaint_count} complaint${
-        result.affected_complaint_count === 1 ? "" : "s"
-      } with registered coordinates fall under the proposed boundary.`,
+      total != null && total > 0
+        ? `${affected} of ${total} open complaints are affected by the proposed boundary; ${changes} would change civic responsibility.`
+        : `${affected} open complaint${affected === 1 ? "" : "s"} ${affected === 1 ? "is" : "are"} affected by the proposed boundary; ${changes} would change civic responsibility.`,
+    );
+  }
+  if (affected > 0 && withoutResponsibilityChange > 0) {
+    points.push(
+      `${withoutResponsibilityChange} affected complaint${
+        withoutResponsibilityChange === 1 ? "" : "s"
+      } ${withoutResponsibilityChange === 1 ? "remains" : "remain"} with the same department/service responsibility despite moving to the proposed jurisdiction.`,
     );
   }
   if (result.responsibility_deltas.length > 0) {
@@ -550,16 +571,12 @@ function WhyItMatters({
       } change at the probe point.`,
     );
   }
-  if (preview && preview.affected_count > 0) {
-    points.push(
-      `${preview.affected_count} of ${preview.total_open_complaints} OPEN complaints would switch responsibility (migration candidates).`,
-    );
-  }
-  if (conflicts > 0) {
-    points.push(
-      `${conflicts} responsibility conflict tag${conflicts === 1 ? "" : "s"} detected by the backend.`,
-    );
-  }
+  points.push(
+    `${conflicts} responsibility conflict${conflicts === 1 ? "" : "s"} detected.`,
+  );
+  points.push(
+    "Live jurisdiction data remains unchanged — the scenario is a read-only proposal.",
+  );
 
   return (
     <div className="card why-card">
@@ -596,6 +613,9 @@ function ImpactDetails({
   previewLoading: boolean;
   previewError: string | null;
 }) {
+  const affected = preview?.complaints.filter((c) => c.in_proposed_boundary) ?? [];
+  const responsibilityChanged =
+    preview?.complaints.filter((c) => c.responsibility_changed) ?? [];
   const migrated = preview?.complaints.filter((c) => c.migration_required) ?? [];
   const conflicts = conflictCount(result);
   const wardTransitions = new Set<string>();
@@ -614,14 +634,14 @@ function ImpactDetails({
         </summary>
         {previewLoading && <p className="muted">Loading complaint preview…</p>}
         {previewError && <p className="error-text">{previewError}</p>}
-        {preview && migrated.length === 0 && (
+        {preview && affected.length === 0 && (
           <p className="muted">
-            No OPEN complaint changes responsibility under {result.scenario_code} on the preview date.
+            No OPEN complaint falls inside the proposed boundary of {result.scenario_code} on the preview date.
           </p>
         )}
-        {migrated.length > 0 && (
+        {affected.length > 0 && (
           <div className="complaint-rows">
-            {migrated.map((c) => (
+            {affected.map((c) => (
               <div key={c.public_ref} className="complaint-row">
                 <code>{c.public_ref}</code>
                 <em>{c.issue_type_name ?? c.issue_type}</em>
@@ -629,6 +649,9 @@ function ImpactDetails({
                   ({c.latitude.toFixed(4)}, {c.longitude.toFixed(4)}) · ward {c.current_ward_code ?? "—"}
                 </span>
                 <span className="complaint-flip">{complaintRowLabel(c)}</span>
+                {!c.responsibility_changed && (
+                  <span className="complaint-badge">department/service unchanged</span>
+                )}
                 <p className="muted">{c.explanation}</p>
               </div>
             ))}
@@ -639,10 +662,15 @@ function ImpactDetails({
       <details className="impact-detail">
         <summary>
           Changed responsibilities
-          <span className="count-chip">{result.responsibility_deltas.length + migrated.length}</span>
+          <span className="count-chip">{result.responsibility_change_count}</span>
         </summary>
         {result.responsibility_deltas.length > 0 && (
-          <div className="delta-rows">
+          <>
+            <h5 className="impact-subhead">
+              Probe-point analysis{" "}
+              <span className="muted">(this location, not complaint counts)</span>
+            </h5>
+            <div className="delta-rows">
             {result.responsibility_deltas.map((delta, index) => (
               <div key={index} className="delta-row">
                 <div className="delta-current">
@@ -691,12 +719,16 @@ function ImpactDetails({
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          </>
         )}
-        {migrated.length > 0 && (
+        {responsibilityChanged.length > 0 && (
           <div className="complaint-rows">
-            <h5>Complaint-level responsibility switch <span className="muted">(migration candidates)</span></h5>
-            {migrated.map((c) => (
+            <h5>
+              Complaints switching department/service responsibility
+              <span className="muted"> ({result.responsibility_change_count})</span>
+            </h5>
+            {responsibilityChanged.map((c) => (
               <div key={c.public_ref} className="complaint-row">
                 <code>{c.public_ref}</code>
                 <span className="complaint-flip">{complaintRowLabel(c)}</span>
@@ -704,7 +736,7 @@ function ImpactDetails({
             ))}
           </div>
         )}
-        {result.responsibility_deltas.length === 0 && migrated.length === 0 && (
+        {result.responsibility_deltas.length === 0 && responsibilityChanged.length === 0 && (
           <p className="muted">No responsibility mappings change for this simulation.</p>
         )}
       </details>
