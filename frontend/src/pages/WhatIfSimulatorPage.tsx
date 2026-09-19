@@ -43,7 +43,7 @@ const QUICK_SCENARIOS: QuickScenario[] = [
   {
     label: "Heritage core · outside rezone",
     code: "SC-V3-REZONE",
-    point: { lon: 76.635, lat: 12.3125 },
+    point: { lon: 76.635, lat: 12.33 },
     issue: "heritage_maintenance",
   },
   {
@@ -55,7 +55,7 @@ const QUICK_SCENARIOS: QuickScenario[] = [
   {
     label: "Heritage boundary flip · responsibility change",
     code: "SC-V3-REZONE",
-    point: { lon: 76.64, lat: 12.31 },
+    point: { lon: 76.655, lat: 12.31 },
     issue: "heritage_maintenance",
   },
 ];

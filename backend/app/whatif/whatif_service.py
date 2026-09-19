@@ -1,12 +1,14 @@
 """Deterministic what-if simulation semantics (P3).
 
-The simulator is strictly read-only. Every run resolves the *live*
-responsibility (P1/P2 wiring) and a *proposed* responsibility against a
-deterministic overlay boundary — ``HERITAGE_ZONE_EXPANDED`` — and reports
-deltas without touching a live ``jurisdictions``/``jurisdiction_versions``/
-``routing_rules``/``complaints`` row. Applying a scenario is an explicit
-migration concern handled only in a later phase (``MigrationPlan`` flow);
-this service never flushes anything.
+The simulator is strictly read-only. Every run loads the *active* scenario's
+stored proposed geometry (``simulation_scenarios.geometry_wkb``), resolves the
+live responsibility via the P2 routing wiring for the same point, resolves the
+proposed responsibility that the scenario implies (the heritage precinct that
+owns the proposed region), and reports genuine deltas only. The proposal is
+purely analytical: nothing is ever written to a live
+``jurisdictions``/``jurisdiction_versions``/``routing_rules``/``complaints``
+row. Applying a scenario is an explicit migration concern handled only in a
+later phase (``MigrationPlan`` flow); this service never flushes anything.
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ from datetime import date
 
 from shapely.geometry import Point, mapping, shape
 from shapely.wkb import dumps as wkb_dumps, loads as wkb_loads
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError, GeoValidationError
@@ -28,7 +30,7 @@ from app.gis.crs import project_to_metric
 from app.gis.shapely_provider import ShapelyGeometryProvider
 from app.gis.temporal_engine import TemporalJurisdictionEngine
 from app.routing.routing_service import ResponsibilityRoutingService
-from app.schemas.routing import RoutingResult
+from app.schemas.routing import ActorRef, RoutingResult, RoutingStatus
 from app.schemas.whatif import (
     ImpactMetric,
     MigrationComplaintPreview,
@@ -41,7 +43,7 @@ from app.schemas.whatif import (
     WhatIfScenarioResponse,
     WhatIfSimulateResponse,
 )
-from app.seed.geometry import HERITAGE_ZONE, HERITAGE_ZONE_EXPANDED
+from app.seed.geometry import HERITAGE_ZONE
 
 PREVIEW_DATE = date(2024, 6, 1)
 HERITAGE_PRECINCT_CODE = "HER-01"
@@ -127,49 +129,55 @@ class WhatIfSimulationService:
         issue_type_code: str,
         on_date: date,
     ) -> WhatIfSimulateResponse:
+        scenario = self._load_active_scenario()
+        boundary = _decoded_boundary(scenario) if scenario is not None else None
+        inside = boundary is not None and boundary.covers(Point(longitude, latitude))
+
         current = self._routing_service().resolve(
             longitude=longitude,
             latitude=latitude,
             issue_type=issue_type_code,
             on_date=on_date,
         )
-        inside = HERITAGE_ZONE_EXPANDED.covers(Point(longitude, latitude))
-        current_inside_live = HERITAGE_ZONE.covers(Point(longitude, latitude))
 
-        proposed: RoutingResult | None
-        if inside:
-            # The deterministic demo overlay re-resolves the same routing
-            # inputs; deltas hence only ever appear for real scenarios crafted
-            # through the migration flow agenda. This keeps the simulator in
-            # strict read-only isolation.
-            proposed = current
-        else:
-            proposed = None
+        heritage = self._heritage_precinct()
+        proposed: RoutingResult | None = None
+        if inside and heritage is not None:
+            proposed = self._proposed_result(
+                heritage=heritage,
+                current=current,
+                longitude=longitude,
+                latitude=latitude,
+                issue_type_code=issue_type_code,
+                on_date=on_date,
+            )
 
-        deltas = self._deltas(
+        deltas = self._responsibility_deltas(
+            current=current,
+            proposed=proposed,
             longitude=longitude,
             latitude=latitude,
-            issue_type_code=issue_type_code,
             on_date=on_date,
-            inside=inside,
-            current_inside_live=current_inside_live,
-            current=current,
+            issue_type_code=issue_type_code,
+            scenario_code=scenario.code if scenario else "",
         )
+
+        candidates, _ = self._migration_candidates(boundary, on_date)
+        affected_count = sum(1 for row in candidates if row["migrated"])
+
         return WhatIfSimulateResponse(
-            scenario_code=self._active_scenario_code(),
-            scenario_name=self._active_scenario_name(),
+            scenario_code=scenario.code if scenario else "SC-V3-REZONE",
+            scenario_name=(
+                scenario.name if scenario else "V.V. Mohalla Rezone (Proposed 2026)"
+            ),
             in_proposed_geometry=inside,
             on_date=on_date,
             current=current,
             proposed=proposed,
             responsibility_deltas=deltas,
-            affected_complaint_count=self._affected_count(
-                longitude=longitude, latitude=latitude, inside=inside
-            ),
-            impact=self._impact(inside=inside, current=current),
-            potential_conflicts=self._potential_conflicts(
-                longitude=longitude, latitude=latitude, inside=inside
-            ),
+            affected_complaint_count=affected_count,
+            impact=self._impact(inside=inside, boundary=boundary),
+            potential_conflicts=self._potential_conflicts(deltas=deltas, inside=inside),
         )
 
     def impact(self, scenario_code: str) -> WhatIfImpactResponse:
@@ -180,19 +188,28 @@ class WhatIfSimulationService:
         )
         if scenario is None:
             raise NotFoundError(f"Scenario {scenario_code!r} does not exist")
+        boundary = _decoded_boundary(scenario)
+        candidates, _ = self._migration_candidates(boundary, PREVIEW_DATE)
+        complaint_refs = [
+            WhatIfComplaintRef(
+                public_ref=row["complaint"].public_ref,
+                issue_type_code=row["complaint"].issue_type_code,
+                latitude=row["complaint"].lat,
+                longitude=row["complaint"].lng,
+                ward_code=row["current"].ward_code,
+                ward_name=row["current"].ward_name,
+            )
+            for row in candidates
+            if row["in_proposed"]
+        ]
         return WhatIfImpactResponse(
             scenario_code=scenario.code,
             scenario_name=scenario.name,
-            affected_complaints=[
-                WhatIfComplaintRef(
-                    public_ref="C-1001",
-                    issue_type_code="heritage_maintenance",
-                    latitude=12.3082,
-                    longitude=76.6438,
-                )
-            ],
-            impact=self._impact(inside=True, current=None),
-            potential_conflicts=[],
+            affected_complaints=complaint_refs,
+            impact=self._impact(inside=True, boundary=boundary),
+            potential_conflicts=(
+                ["HERITAGE"] if complaint_refs else ["NONE"]
+            ),
         )
 
     def migration_preview(
@@ -215,19 +232,60 @@ class WhatIfSimulationService:
         if scenario is None:
             raise NotFoundError(f"Scenario {scenario_code!r} does not exist")
         boundary = _decoded_boundary(scenario)
-        heritage = self._heritage_precinct()
-
-        complaints = list(
-            self._db.scalars(
-                select(Complaint)
-                .where(Complaint.status == "OPEN")
-                .order_by(Complaint.id)
-            )
-        )
         issue_names = dict(self._db.execute(select(IssueType.code, IssueType.name)).all())
 
-        rows: list[MigrationComplaintPreview] = []
-        affected_count = 0
+        candidates, _ = self._migration_candidates(boundary, on_date)
+        rows = [
+            self._preview_row(
+                complaint=row["complaint"],
+                in_proposed=row["in_proposed"],
+                current=row["current"],
+                proposed=row["proposed"],
+                migrated=row["migrated"],
+                scenario_code=scenario_code,
+                issue_names=issue_names,
+            )
+            for row in candidates
+        ]
+        return MigrationPreviewResponse(
+            scenario_code=scenario_code,
+            scenario_name=scenario.name,
+            preview_date=on_date,
+            total_open_complaints=len(candidates),
+            affected_count=sum(1 for row in candidates if row["migrated"]),
+            complaints=rows,
+        )
+
+    # ------------------------------------------------------------------
+    # shared P4 candidates (used by preview AND simulate)
+    # ------------------------------------------------------------------
+
+    def _migration_candidates(self, boundary, on_date: date) -> tuple[list[dict], dict | None]:
+        """Evaluate every OPEN complaint against ``boundary`` on ``on_date``.
+
+        Returns ``(rows, heritage)`` where each row is a dict with the
+        complaint, its spatial membership inside the proposed boundary, its
+        live (before) responsibility and — when inside — the heritage-precinct
+        proposed (after) responsibility. Purely read-only. Shared by
+        ``migration_preview`` and ``simulate`` so the two always report the
+        same affected count for the same scenario and date.
+        """
+        if boundary is None:
+            complaints: list[Complaint] = []
+        else:
+            complaints = list(
+                self._db.scalars(
+                    select(Complaint)
+                    .where(
+                        Complaint.status == "OPEN",
+                        Complaint.lat.is_not(None),
+                        Complaint.lng.is_not(None),
+                    )
+                    .order_by(Complaint.id)
+                )
+            )
+        heritage = self._heritage_precinct()
+        rows: list[dict] = []
         for complaint in complaints:
             in_proposed = boundary.covers(Point(complaint.lng, complaint.lat))
             current = self._routing_service().resolve(
@@ -237,28 +295,16 @@ class WhatIfSimulationService:
                 on_date=on_date,
             )
             proposed = heritage if in_proposed else None
-            migrated = self._requires_migration(current, in_proposed, proposed)
-            if migrated:
-                affected_count += 1
             rows.append(
-                self._preview_row(
-                    complaint=complaint,
-                    in_proposed=in_proposed,
-                    current=current,
-                    proposed=proposed,
-                    migrated=migrated,
-                    scenario_code=scenario_code,
-                    issue_names=issue_names,
-                )
+                {
+                    "complaint": complaint,
+                    "in_proposed": in_proposed,
+                    "current": current,
+                    "proposed": proposed,
+                    "migrated": self._requires_migration(current, in_proposed, proposed),
+                }
             )
-        return MigrationPreviewResponse(
-            scenario_code=scenario_code,
-            scenario_name=scenario.name,
-            preview_date=on_date,
-            total_open_complaints=len(complaints),
-            affected_count=affected_count,
-            complaints=rows,
-        )
+        return rows, heritage
 
     # ------------------------------------------------------------------
     # P4 migration preview helpers
@@ -275,6 +321,7 @@ class WhatIfSimulationService:
             return None
         return {
             "jurisdiction": jurisdiction,
+            "rule": rule,
             "authority": self._db.get(Authority, rule.authority_id),
             "department": self._db.get(Department, rule.department_id),
             "service": self._db.get(Service, rule.service_id),
@@ -409,107 +456,176 @@ class WhatIfSimulationService:
             db=self._db, engine=self._engine, provider=self._provider
         )
 
-    def _deltas(
+    def _load_active_scenario(self) -> SimulationScenario | None:
+        """The scenario every headless simulate runs against.
+
+        Deterministic: the first DRAFT scenario by id — which in a fresh
+        checked-out database is the seeded ``SC-V3-REZONE`` demo. User-created
+        scenarios never hijack the demo unless they are DRAFT and sort first.
+        """
+        return self._db.scalar(
+            select(SimulationScenario)
+            .where(SimulationScenario.status == "DRAFT")
+            .order_by(SimulationScenario.id)
+            .limit(1)
+        )
+
+    def _proposed_result(
         self,
         *,
+        heritage: dict,
+        current: RoutingResult,
         longitude: float,
         latitude: float,
         issue_type_code: str,
         on_date: date,
-        inside: bool,
-        current_inside_live: bool,
-        current: RoutingResult,
-    ) -> list[ResponsibilityDelta]:
-        if not inside or current_inside_live:
-            # Inside the live heritage zone (or outside the proposal): the
-            # deterministic overlay does not change responsibility.
-            return []
-        return [
-            ResponsibilityDelta(
-                issue_type_code=issue_type_code,
-                issue_type_name=issue_type_code,
-                longitude=longitude,
-                latitude=latitude,
-                on_date=on_date,
-                status="PROPOSED",
-                matched_scope=current.matched_scope or "HERITAGE_PRECINCT",
-                authority_code=(
-                    current.authority.code if current.authority else None
-                ),
-                authority_name=(
-                    current.authority.name if current.authority else None
-                ),
-                department_code=(
-                    current.department.code if current.department else None
-                ),
-                department_name=(
-                    current.department.name if current.department else None
-                ),
-                service_code=(
-                    current.service.code if current.service else None
-                ),
-                service_name=(
-                    current.service.name if current.service else None
-                ),
-                conflict_rule_codes=[],
-                description=(
-                    "The proposed expanded heritage precinct assumes "
-                    "responsibility for this point."
-                ),
-            )
-        ]
+    ) -> RoutingResult:
+        """Proposed resolution: the heritage precinct owns an inside point.
 
-    def _affected_count(self, *, longitude: float, latitude: float, inside: bool) -> int:
-        if not inside:
-            return 0
-        from app.db.models.complaints import Complaint
-
-        return int(
-            self._db.scalar(
-                select(func.count(Complaint.id)).where(
-                    Complaint.lng.is_not(None),
-                    Complaint.lat.is_not(None),
-                )
-            )
-            or 0
+        Encodes exactly the migration-preview outcome — same point, same issue,
+        same date — routed to the heritage precinct's authority/department/
+        service via its single routing rule. Ward is inherited from the live
+        resolution (the proposal only re-routes, it does not re-wardmail).
+        """
+        authority = heritage["authority"]
+        department = heritage["department"]
+        service = heritage["service"]
+        rule = heritage["rule"]
+        jurisdiction = heritage["jurisdiction"]
+        return RoutingResult(
+            status=RoutingStatus.RESOLVED,
+            latitude=latitude,
+            longitude=longitude,
+            issue_type=issue_type_code,
+            effective_date=on_date,
+            jurisdiction_code=jurisdiction.code,
+            jurisdiction_name=jurisdiction.name,
+            jurisdiction_kind=jurisdiction.kind,
+            version_code=None,
+            version_status=None,
+            ward_code=current.ward_code,
+            ward_name=current.ward_name,
+            matched_scope="HERITAGE_PRECINCT",
+            authority=_actor_ref(authority),
+            department=_actor_ref(department),
+            service=_actor_ref(service),
+            sla_days=None,
+            routing_rule_code=rule.code,
+            routing_rule_id=rule.id,
+            escalation_path=[],
+            conflict_rule_codes=[],
+            explanation=(
+                f"Proposed: inside the boundary of {jurisdiction.code}, routed by "
+                f"{rule.code} to {department.name} / {service.name}."
+            ),
+            reason=None,
         )
 
-    def _impact(
-        self, *, inside: bool, current: RoutingResult | None
-    ) -> list[ImpactMetric]:
+    def _responsibility_deltas(
+        self,
+        *,
+        current: RoutingResult,
+        proposed: RoutingResult | None,
+        longitude: float,
+        latitude: float,
+        on_date: date,
+        issue_type_code: str,
+        scenario_code: str,
+    ) -> list[ResponsibilityDelta]:
+        """Report one delta per field that genuinely differs (never fabricated).
+
+        ``proposed`` carries the territory the scenario actually implies, so a
+        delta appears only when the live and proposed responsibilities really
+        disagree on a jurisdiction / ward / authority / department / service /
+        routing rule. An empty list is returned when the proposal leaves
+        responsibility unchanged.
+        """
+        if proposed is None:
+            return []
+        fields = (
+            ("jurisdiction", current.jurisdiction_code, proposed.jurisdiction_code),
+            ("ward", current.ward_code, proposed.ward_code),
+            (
+                "authority",
+                current.authority.code if current.authority else None,
+                proposed.authority.code if proposed.authority else None,
+            ),
+            (
+                "department",
+                current.department.code if current.department else None,
+                proposed.department.code if proposed.department else None,
+            ),
+            (
+                "service",
+                current.service.code if current.service else None,
+                proposed.service.code if proposed.service else None,
+            ),
+            ("routing rule", current.routing_rule_code, proposed.routing_rule_code),
+        )
+        deltas: list[ResponsibilityDelta] = []
+        for kind, before, after in fields:
+            if before == after:
+                continue
+            deltas.append(
+                ResponsibilityDelta(
+                    issue_type_code=issue_type_code,
+                    issue_type_name=self._issue_name(issue_type_code) or issue_type_code,
+                    longitude=longitude,
+                    latitude=latitude,
+                    on_date=on_date,
+                    status="PROPOSED",
+                    matched_scope=proposed.matched_scope,
+                    jurisdiction_code=current.jurisdiction_code,
+                    jurisdiction_name=current.jurisdiction_name,
+                    ward_code=current.ward_code,
+                    ward_name=current.ward_name,
+                    authority_code=(
+                        current.authority.code if current.authority else None
+                    ),
+                    authority_name=(
+                        current.authority.name if current.authority else None
+                    ),
+                    department_code=(
+                        current.department.code if current.department else None
+                    ),
+                    department_name=(
+                        current.department.name if current.department else None
+                    ),
+                    service_code=current.service.code if current.service else None,
+                    service_name=current.service.name if current.service else None,
+                    routing_rule_code=current.routing_rule_code,
+                    conflict_rule_codes=[],
+                    description=(
+                        f"{kind} changes under {scenario_code}: "
+                        f"{before or '(none)'} -> {after or '(none)'}."
+                    ),
+                )
+            )
+        return deltas
+
+    def _issue_name(self, issue_type_code: str) -> str | None:
+        return self._db.scalar(
+            select(IssueType.name).where(IssueType.code == issue_type_code)
+        )
+
+    def _impact(self, *, inside: bool, boundary) -> list[ImpactMetric]:
         live_area = _area_km2(HERITAGE_ZONE)
-        proposed_area = _area_km2(HERITAGE_ZONE_EXPANDED)
+        proposed_area = _area_km2(boundary) if boundary is not None else 0.0
         return [
             ImpactMetric(
                 label="Heritage precinct area (km2)",
-                current=int(live_area) if inside else 0,
-                proposed=int(proposed_area),
-                delta=int(proposed_area - live_area) if inside else int(proposed_area),
+                current=round(live_area, 4),
+                proposed=round(proposed_area, 4),
+                delta=round(proposed_area - live_area, 4),
             )
         ]
 
     def _potential_conflicts(
-        self, *, longitude: float, latitude: float, inside: bool
+        self, *, deltas: list[ResponsibilityDelta], inside: bool
     ) -> list[str]:
+        if deltas:
+            return ["HERITAGE"]
         return ["HERITAGE" if inside else "NONE"]
-
-    def _active_scenario_code(self) -> str:
-        row = self._db.scalar(
-            select(SimulationScenario)
-            .where(SimulationScenario.status == "DRAFT")
-            .order_by(SimulationScenario.code)
-            .limit(1)
-        )
-        return row.code if row else "SC-V3-REZONE"
-
-    def _active_scenario_name(self) -> str:
-        row = self._db.scalar(
-            select(SimulationScenario)
-            .where(SimulationScenario.status == "DRAFT")
-            .order_by(SimulationScenario.code)
-            .limit(1)
-        )
-        return row.name if row else "V.V. Mohalla Rezone (Proposed 2026)"
 
     def _scenario_payload(self, scenario: SimulationScenario) -> WhatIfScenarioResponse:
         return WhatIfScenarioResponse(
@@ -525,6 +641,13 @@ class WhatIfSimulationService:
             result_summary=scenario.result_summary,
             created_at=scenario.created_at.isoformat(),
         )
+
+
+def _actor_ref(actor) -> ActorRef | None:
+    """Wrap a live authority/department/service row in the wire ActorRef shape."""
+    if actor is None:
+        return None
+    return ActorRef(id=actor.id, code=actor.code, name=actor.name)
 
 
 def _area_km2(polygon) -> float:

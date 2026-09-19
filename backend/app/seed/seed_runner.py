@@ -38,6 +38,8 @@ from app.db.models import (
 )
 from app.gis.shapely_provider import ShapelyGeometryProvider
 from app.seed.geometry import (
+    HERITAGE_ZONE,
+    HERITAGE_ZONE_PROPOSED,
     NH_CORRIDOR,
     build_v1_ward_mosaic,
     build_v2_ward_mosaic,
@@ -285,10 +287,6 @@ COMPLAINT_DEFS = [
     (1009, "heritage_maintenance", 12.3120, 76.6380, "OPEN", "Heritage precinct",
      "Graffiti cleanup near the heritage precinct boundary."),
 ]
-
-HERITAGE_ZONE = Polygon(
-    [(76.62, 12.305), (76.65, 12.305), (76.65, 12.32), (76.62, 12.32)]
-)
 
 FLIP_RNG_SEED = 7
 MOSAIC_V1_SEED = 11
@@ -685,12 +683,18 @@ def _seed_conflicts(session, complaints) -> None:
 
 
 def _seed_scenarios(session) -> None:
-    geojson, wkb_raw, envelope = _geometry_payload(HERITAGE_ZONE)
+    # The SC-V3-REZONE scenario carries real *proposed* geometry: the V3
+    # heritage rezone boundary, stored on the scenario row (geometry_wkb) so
+    # the what-if simulator and migration preview read the same proposed
+    # boundary at runtime. It deliberately differs from the live HER-01
+    # precinct and never reaches the live jurisdictions table.
+    geojson, wkb_raw, envelope = _geometry_payload(HERITAGE_ZONE_PROPOSED)
     scenario = SimulationScenario(
         code="SC-V3-REZONE",
         name="V.V. Mohalla Rezone (Proposed 2026)",
-        description="Proposed boundary swap around the V.V. Mohalla precinct. "
-                    "Isolated from live jurisdictions until explicitly applied.",
+        description="Proposed V3 heritage-precinct rezone around V.V. Mohalla. "
+                    "Stored as scenario geometry only - isolated from live "
+                    "jurisdictions until explicitly applied.",
         status="DRAFT", applies_to="WARD",
         affected_region_name="V.V. Mohalla precinct",
         geometry_geojson=geojson, geometry_wkb=wkb_raw, envelope_geojson=envelope,

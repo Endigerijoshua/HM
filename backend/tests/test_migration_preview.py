@@ -130,3 +130,29 @@ def test_migration_preview_disregards_closed_complaints(client) -> None:
     refs = {item["public_ref"] for item in body["complaints"]}
     assert "C-1005" not in refs  # IN_PROGRESS
     assert "C-1006" not in refs  # RESOLVED
+
+
+def test_whatif_simulate_count_agrees_with_preview(client) -> None:
+    """simulate().affected_complaint_count always equals the preview count.
+
+    Both callers evaluate the same OPEN-complaint set against the same stored
+    scenario boundary, so the what-if affected count and the migration-preview
+    affected count are identical for a given scenario and date.
+    """
+    from app.whatif.whatif_service import PREVIEW_DATE
+
+    preview = client.get(
+        "/api/v1/whatif/scenarios/SC-V3-REZONE/migration-preview"
+    ).json()
+
+    resp = client.post("/api/v1/whatif/simulate", json={
+        "longitude": 76.6375,
+        "latitude": 12.3125,
+        "issue_type_code": "water_supply",
+        "on_date": PREVIEW_DATE.isoformat(),
+    })
+    assert resp.status_code == 200, resp.text
+    sim = resp.json()
+    assert sim["scenario_code"] == "SC-V3-REZONE"
+    assert sim["affected_complaint_count"] == preview["affected_count"] == 3
+    assert sim["affected_complaint_count"] == preview["total_open_complaints"] - 4

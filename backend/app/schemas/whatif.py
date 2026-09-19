@@ -25,9 +25,9 @@ class ScenarioStatus(str, Enum):
 
 class ImpactMetric(BaseModel):
     label: str
-    current: int
-    proposed: int
-    delta: int
+    current: float
+    proposed: float
+    delta: float
 
 
 class ResponsibilityDelta(BaseModel):
@@ -44,6 +44,7 @@ class ResponsibilityDelta(BaseModel):
     department_name: str | None = None
     service_code: str | None = None
     service_name: str | None = None
+    routing_rule_code: str | None = None
     conflict_rule_codes: list[str] = Field(default_factory=list)
     description: str
 

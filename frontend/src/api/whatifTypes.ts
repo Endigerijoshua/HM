@@ -48,6 +48,7 @@ export interface ResponsibilityDelta {
   department_name: string | null;
   service_code: string | null;
   service_name: string | null;
+  routing_rule_code: string | null;
   conflict_rule_codes: string[];
   description: string;
 }

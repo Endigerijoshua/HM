@@ -20,24 +20,27 @@ NH_CORRIDOR = Polygon(
 )
 
 # ---------------------------------------------------------------------------
-# Heritage precinct + PROPOSED overlay (P3 what-if simulator)
+# Heritage precinct + PROPOSED rezone (P3 what-if simulator / seed data)
 #
-# ``HERITAGE_ZONE`` is the live heritage precinct boundary seeded in
-# ``seed_runner._seed_jurisdictions``. ``HERITAGE_ZONE_EXPANDED`` is the
-# deterministic *proposed* overlay boundary the P3 what-if simulator resolves
-# against; it is deliberately read-only and is never written to the live
-# ``jurisdictions`` table.
+# ``HERITAGE_ZONE`` is the single authoritative LIVE heritage precinct boundary
+# seeded into the ``jurisdictions`` table as ``HER-01``. It is the *current*
+# geometry for every read of live responsibility (routing, what-if current
+# resolution, migration preview "before" snapshots).
+#
+# ``HERITAGE_ZONE_PROPOSED`` is the deterministic PROPOSED V3 rezone boundary.
+# It exists only so the seed can truthfully populate the ``SC-V3-REZONE``
+# simulation scenario's stored ``geometry_wkb`` - the what-if simulator reads
+# the geometry from the scenario row at runtime and never hardcodes or imports
+# this constant. Nothing is ever written to live jurisdictions or routing rules
+# from it.
 # ---------------------------------------------------------------------------
 HERITAGE_ZONE = Polygon(
-    [(76.6328, 12.298), (76.6542, 12.298), (76.6542, 12.3082), (76.6328, 12.3082)]
+    [(76.62, 12.305), (76.65, 12.305), (76.65, 12.32), (76.62, 12.32)]
 )
 
 
-HERITAGE_ZONE_EXPANDED = Polygon(
-    [
-        (76.629, 12.295), (76.658, 12.295), (76.658, 12.311),
-        (76.629, 12.311),
-    ]
+HERITAGE_ZONE_PROPOSED = Polygon(
+    [(76.618, 12.298), (76.66, 12.298), (76.66, 12.322), (76.618, 12.322)]
 )
 
 
@@ -141,7 +144,7 @@ def find_flip_point_between(
 #
 # The P1/P3 seed mosaic needs a stable outer rectangle to slice into a 3x3
 # ward grid. These four floats are pure demo bounds: they enclose both
-# ``NH_CORRIDOR`` and ``HERITAGE_ZONE``/``HERITAGE_ZONE_EXPANDED`` above and
+# ``NH_CORRIDOR`` and ``HERITAGE_ZONE``/``HERITAGE_ZONE_PROPOSED`` above and
 # are never persisted as a real spatial boundary anywhere.
 # ---------------------------------------------------------------------------
 WARD_MINX = 76.59

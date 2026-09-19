@@ -18,9 +18,14 @@ before/after and requiring it to be unchanged.
 """
 from __future__ import annotations
 
+import json
 import random
 
+from shapely.geometry import Point, Polygon, shape
+
 from app.seed.geometry import (
+    HERITAGE_ZONE,
+    HERITAGE_ZONE_PROPOSED,
     WARD_MAXX,
     WARD_MAXY,
     WARD_MINX,
@@ -122,3 +127,152 @@ def test_create_scenario_does_not_mutate_active_jurisdictions(client, db) -> Non
         (j.code, j.name, j.kind) for j in db.query(Jurisdiction).order_by(Jurisdiction.code)
     ]
     assert after == before
+
+
+def _simulate(client, *, lon: float, lat: float, issue: str, on_date: str = "2026-09-18"):
+    resp = client.post("/api/v1/whatif/simulate", json={
+        "longitude": lon,
+        "latitude": lat,
+        "issue_type_code": issue,
+        "on_date": on_date,
+    })
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_a_proposed_geometry_differs_from_current(client) -> None:
+    """The simulator reads the scenario's real stored boundary, not live HER-01."""
+    listed = client.get("/api/v1/whatif/scenarios").json()
+    scenario = next(s for s in listed["scenarios"] if s["code"] == "SC-V3-REZONE")
+    boundary = shape(scenario["geometry_geojson"])
+    assert boundary == Polygon(HERITAGE_ZONE_PROPOSED)
+    assert boundary != Polygon(HERITAGE_ZONE)
+
+    # (76.655, 12.31) lies east of the live HER-01 edge (lng 76.65) yet is inside
+    # the proposed boundary (lng 76.66) -> prove the simulation used the proposal.
+    body = _simulate(client, lon=76.655, lat=12.31, issue="heritage_maintenance")
+    assert body["in_proposed_geometry"] is True
+    assert (body["proposed"] or {})["jurisdiction_code"] == "HER-01"
+
+
+def test_b_known_demo_location_changes_responsibility(client) -> None:
+    """C-1009's heritage point is live-owned by ward W-05, proposed -> HER-01."""
+    body = _simulate(client, lon=76.638, lat=12.312, issue="heritage_maintenance")
+    assert body["in_proposed_geometry"] is True
+    assert body["current"]["jurisdiction_code"] == "W-05"
+    assert body["proposed"]["jurisdiction_code"] == "HER-01"
+    assert body["proposed"]["matched_scope"] == "HERITAGE_PRECINCT"
+    assert body["proposed"]["routing_rule_code"] == "RULE-HERITAGE-01"
+    deltas = body["responsibility_deltas"]
+    assert deltas, "heritage point under a ward must report a jurisdiction delta"
+    assert any(
+        "W-05" in d["description"] and "HER-01" in d["description"]
+        for d in deltas
+    )
+    # heritage dept/service are unchanged, so only jurisdiction flips.
+    assert all(d["department_code"] == "MCC-D-HP" for d in deltas)
+    assert all(d["service_code"] == "SVC-HERITAGE" for d in deltas)
+
+
+def test_c_unaffected_locations_do_not_falsely_change(client) -> None:
+    """Outside the proposal -> no proposed result, no fabricated deltas."""
+    flip_lon, flip_lat = _flip_coords()
+    body = _simulate(client, lon=flip_lon, lat=flip_lat, issue="garbage_collection")
+    assert body["in_proposed_geometry"] is False
+    assert body["proposed"] is None
+    assert body["responsibility_deltas"] == []
+
+    body = _simulate(client, lon=76.63, lat=12.33, issue="heritage_maintenance")
+    assert body["in_proposed_geometry"] is False
+    assert body["proposed"] is None
+    assert body["responsibility_deltas"] == []
+
+
+def test_d_affected_count_is_spatial_membership(client, db) -> None:
+    """affected_complaint_count counts OPEN complaints inside the boundary (==3)."""
+    from app.db.models.complaints import Complaint
+
+    listed = client.get("/api/v1/whatif/scenarios").json()
+    boundary = shape(next(s for s in listed["scenarios"] if s["code"] == "SC-V3-REZONE")["geometry_geojson"])
+    open_inside = [
+        c.public_ref
+        for c in db.query(Complaint).filter(Complaint.status == "OPEN")
+        if boundary.covers(Point(c.lng, c.lat))
+    ]
+    assert set(open_inside) == {"C-1002", "C-1007", "C-1009"}
+
+    for lon, lat, issue in (
+        (76.6438, 12.3082, "heritage_maintenance"),
+        (76.60731308845853, 12.279255877741852, "garbage_collection"),
+    ):
+        body = _simulate(client, lon=lon, lat=lat, issue=issue)
+        assert body["affected_complaint_count"] == len(open_inside) == 3
+        assert body["affected_complaint_count"] < 7  # not "all complaints"
+
+
+def test_e_simulate_does_not_modify_active_records(client, db) -> None:
+    """Simulate + preview leave live jurisdictions/rules/complaints untouched."""
+    from app.db.models.complaints import Complaint
+    from app.db.models.jurisdiction import Jurisdiction, JurisdictionVersion
+    from app.db.models.routing import RoutingRule
+
+    def fingerprint():
+        def table_rows(model, fields):
+            return sorted(
+                [tuple(getattr(r, f) for f in fields) for r in db.query(model).all()]
+            )
+
+        return {
+            "jurisdictions": table_rows(
+                Jurisdiction, ("code", "name", "kind")
+            ),
+            "versions": table_rows(
+                JurisdictionVersion, ("code", "version_no", "status")
+            ),
+            "rules": table_rows(
+                RoutingRule, ("code", "issue_type_code", "authority_id", "department_id", "service_id", "scope", "priority")
+            ),
+            "complaints": table_rows(
+                Complaint, ("public_ref", "status", "lat", "lng")
+            ),
+        }
+
+    before = fingerprint()
+    _simulate(client, lon=76.638, lat=12.312, issue="heritage_maintenance")
+    _simulate(client, lon=76.60731308845853, lat=12.279255877741852, issue="garbage_collection")
+    client.get("/api/v1/whatif/scenarios/SC-V3-REZONE/migration-preview")
+    assert fingerprint() == before
+
+
+def test_f_preview_and_simulate_agree_on_affected(client) -> None:
+    """simulate.affected_complaint_count == migration-preview.affected_count."""
+    from app.whatif.whatif_service import PREVIEW_DATE
+
+    preview = client.get(
+        "/api/v1/whatif/scenarios/SC-V3-REZONE/migration-preview"
+    ).json()
+    assert preview["affected_count"] == 3
+
+    body = _simulate(
+        client,
+        lon=76.6375,
+        lat=12.3125,
+        issue="water_supply",
+        on_date=PREVIEW_DATE.isoformat(),
+    )
+    assert body["affected_complaint_count"] == preview["affected_count"]
+
+    preview_rows = {row["public_ref"]: row for row in preview["complaints"]}
+    for ref in ("C-1002", "C-1007", "C-1009"):
+        assert preview_rows[ref]["in_proposed_boundary"] is True
+        assert preview_rows[ref]["migration_required"] is True
+
+    # A migrating complaint's per-point simulation agrees with its preview row.
+    row = preview_rows["C-1009"]
+    sim = _simulate(
+        client, lon=row["longitude"], lat=row["latitude"],
+        issue=row["issue_type"], on_date=PREVIEW_DATE.isoformat(),
+    )
+    assert sim["proposed"]["jurisdiction_code"] == row["proposed_jurisdiction_code"]
+    assert sim["current"]["jurisdiction_code"] == row["current_jurisdiction_code"]
+    assert len(sim["responsibility_deltas"]) > 0
