@@ -39,9 +39,11 @@ analysis provably read-only and deterministic.
 
 ## Status
 
-P0 foundations → P8 complete frontend integration are all shipped and tested;
-the 8-page web app drives the real backend end to end (see [Roadmap](#roadmap)
-for the per-phase breakdown).
+P0 foundations → P8 complete frontend integration are all shipped and tested,
+plus **P9 location + mobile**: browser geolocation, pick-on-map and manual
+coordinate entry on Citizen Routing, and a mobile-first layout with a sidebar
+drawer. The 8-page web app drives the real backend end to end (see
+[Roadmap](#roadmap) for the per-phase breakdown).
 
 ---
 
@@ -190,7 +192,7 @@ dashboard card and the sidebar dot both surface backend health via
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest   # 160 tests: 151 passing + 9 known pre-existing failures
+.venv\Scripts\python -m pytest -q   # 168 tests, all passing (exit 0)
 ```
 
 Frontend static checks: `npm run typecheck` / `npm run build`.
@@ -542,6 +544,75 @@ the verified flip coordinate `(76.60731308845853, 12.279255877741852)`
 
 ---
 
+## Citizen routing: location & mobile (P9)
+
+Citizen Routing now offers three ways to set the routing point before running
+"Resolve Responsibility", with a single source of truth for the chosen
+location shared by all three inputs:
+
+```ts
+selectedLocation = { latitude, longitude, accuracy?, source: "gps" | "map" | "manual" }
+```
+
+### 1. Use My Current Location (browser geolocation)
+
+The "Use My Current Location" button fires a **single, one-shot**
+`navigator.geolocation.getCurrentPosition` request (`enableHighAccuracy: true`,
+10 s timeout) only after an explicit tap — the app never uses
+`watchPosition`, never requests the location on page load, and holds no
+reading between sessions.
+
+- The detected point recenters the map and is shown with a marker and the
+  browser-reported accuracy ring / distance readout (the app never claims
+  better accuracy than the browser reports).
+- All outcomes are surfaced with friendly guidance: `permission-denied`,
+  `unavailable`, `timeout`, `unsupported` and unknown errors each get a message
+  plus a retry action where it makes sense.
+- **Secure-context requirement:** the Geolocation API is only available in a
+  secure context — `https://` for production / LAN, or `http://localhost` /
+  `http://127.0.0.1` during development.
+
+### 2. Pick on Map
+
+Toggles a pick mode; tapping the map sets the routing point exactly. The
+routing map is now **interactive**: drag to pan, scroll / pinch to zoom, `+/−`
+button controls, a reset-view button, and keyboard panning for the map's focus
+(`Arrow` keys, `+`/`-`, `Enter` selects the center when picking — the map is
+focusable and announces its behavior). A drag vs. tap threshold keeps panning
+from accidentally selecting points.
+
+### 3. Enter coordinates manually
+
+An "Enter coordinates manually" details panel accepts a latitude/longitude with
+range validation (`lat` ∈ [-90, 90], `lng` ∈ [-180, 180]) and sets the same
+routing point. This is the fallback for devices or conditions where the
+browser cannot obtain a GPS fix, and for values read from the map or a GPS
+device.
+
+### Privacy behavior
+
+- Location is **never persisted** — no `localStorage`, session storage, URL
+  params, or backend write beyond the existing `/routing/resolve` request.
+- Coordinates are sent **only** to the existing routing API
+  (`POST /routing/resolve`) at the moment you resolve responsibility — the
+  routing engine and all its constraints are unchanged.
+- No tracking, no third-party services, no continuous monitoring, and no
+  analytics were added.
+
+### Mobile support
+
+- The sidebar becomes an accessible **drawer** under 900 px (hamburger toggle
+  with `aria-expanded`/`aria-controls`, backdrop, scroll lock, closes on
+  navigation).
+- The routing page stacks mobile-first: Issue/Date → location buttons →
+  location readout (`aria-live="polite"` announcements) → Resolve → map →
+  result, with full-width, ≥48 px touch targets and horizontally scrollable
+  tables.
+- A global `:focus-visible` outline keeps keyboard focus visible on every
+  control.
+
+---
+
 ## Security posture (P0 baseline)
 
 - Config via environment (`TCIVIC_*`) — no hard-coded secrets; `TCIVIC_ADMIN_TOKEN` is empty by default.
@@ -563,16 +634,19 @@ the verified flip coordinate `(76.60731308845853, 12.279255877741852)`
 - Routing tables are **single-scope decision tables** (per issue, with optional
   scope overrides and escalation) rather than a full graph; conflicts between
   overlapping responsibilities are *detected and reported*, not auto-reconciled.
-- The 9 pre-existing backend test failures (P1 geometry/uploads scopes) are a
-  known baseline; they predate P2–P9 and are not addressed by this hardening
-  phase.
+- The backend pytest suite (currently 168 tests) passes fully with exit 0.
 - The demo `SC-V3-REZONE` scenario was seeded with a geometry that, for a
   handful of complaint points near its edge, reports issued by the point-in-
   polygon of *simulate* slightly differently from *migration-preview*; both
   views are internally consistent, and the mismatch never changes routing
   output shown to the user.
 - Maps are projected into a fixed local viewBox (SVG); they are resolution-
-  independent and resize-safe, but have no pan/zoom controls yet.
+  independent and resize-safe. Citizen Routing's map supports interactive
+  pan/zoom/pinch (plus keyboard panning); the read-only maps on the other pages
+  keep the original fit-to-viewBox view.
+- Browser geolocation requires a secure context; on plain-HTTP (non-localhost)
+  deployments the "Use My Current Location" button degrades to the "not
+  supported" guidance and the map / manual entry remain available.
 
 ---
 
@@ -624,3 +698,9 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   URL configurable via `VITE_API_BASE_URL` / `VITE_DEV_PROXY_TARGET`.
   (Applying migrations to live isn't implemented — the migration page is a
   read-only preview by design.)
+- **P9** (done): citizen routing location + mobile — one-shot browser
+  geolocation ("Use My Current Location"), pick-on-map with interactive
+  pan/zoom/pinch on the routing map, manual coordinate fallback, a single
+  `selectedLocation` source of truth, `aria-live` status readouts, privacy-safe
+  (no persistence / no tracking), and a mobile-first layout with an accessible
+  sidebar drawer and responsive routing page.

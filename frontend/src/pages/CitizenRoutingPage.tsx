@@ -16,6 +16,11 @@ import { JurisdictionMap } from "../components/map/JurisdictionMap";
 import { RoutingExplanation } from "../components/routing/RoutingExplanation";
 import { DemoFlowBar } from "../components/DemoFlowBar";
 import { MapLegend } from "../components/map/MapLegend";
+import { useGeolocation } from "../hooks/useGeolocation";
+import {
+  isGeolocationSupported,
+  type SelectedLocation,
+} from "../lib/geolocation";
 
 const MIN_DATE = "2020-01-01";
 const MAX_DATE = "2026-12-31";
@@ -83,6 +88,14 @@ export default function CitizenRoutingPage() {
   const [resolving, setResolving] = useState(false);
   const [graph, setGraph] = useState<GraphResolveResponse | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
+
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [focusLocation, setFocusLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
+  const [manualError, setManualError] = useState<string | null>(null);
+  const geo = useGeolocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -203,9 +216,48 @@ export default function CitizenRoutingPage() {
     [],
   );
 
-  const handleSelect = (lat: number, lng: number) => {
-    if (!issueType) return;
-    runResolve(lat, lng, issueType, onDate);
+  const applyGps = useCallback(() => {
+    geo.requestLocation({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  }, [geo]);
+
+  useEffect(() => {
+    if (geo.status !== "success" || geo.latitude == null || geo.longitude == null) return;
+    setSelectedLocation({
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      accuracy: geo.accuracy,
+      source: "gps",
+    });
+    setFocusLocation({ lat: geo.latitude, lng: geo.longitude });
+    setPicking(false);
+  }, [geo.status, geo.latitude, geo.longitude, geo.accuracy]);
+
+  const handleSelect = useCallback(
+    (lat: number, lng: number) => {
+      setSelectedLocation({ latitude: lat, longitude: lng, accuracy: null, source: "map" });
+      setPicking(false);
+      geo.reset();
+      if (issueType) runResolve(lat, lng, issueType, onDate);
+    },
+    [geo, issueType, onDate, runResolve],
+  );
+
+  const applyManual = () => {
+    const lat = Number(manualLat);
+    const lng = Number(manualLng);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      setManualError("Latitude must be a number between -90 and 90.");
+      return;
+    }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      setManualError("Longitude must be a number between -180 and 180.");
+      return;
+    }
+    setManualError(null);
+    setSelectedLocation({ latitude: lat, longitude: lng, accuracy: null, source: "manual" });
+    setFocusLocation({ lat, lng });
+    setPicking(false);
+    geo.reset();
   };
 
   const [searchParams] = useSearchParams();
@@ -222,12 +274,15 @@ export default function CitizenRoutingPage() {
     setIssueType(issue);
     const date = searchParams.get("date");
     if (date) setOnDate(date);
+    setSelectedLocation({ latitude: lat, longitude: lng, accuracy: null, source: "map" });
     runResolve(lat, lng, issue, date ?? onDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode]);
 
   const handleScenario = (issue: string, point: { lat: number; lng: number }) => {
     setIssueType(issue);
+    setSelectedLocation({ latitude: point.lat, longitude: point.lng, accuracy: null, source: "map" });
+    setPicking(false);
     runResolve(point.lat, point.lng, issue, onDate);
   };
 
@@ -306,6 +361,129 @@ export default function CitizenRoutingPage() {
       {state.kind === "error" && <p className="error-text">{state.message}</p>}
       {state.kind === "loading" && <p className="muted">Loading jurisdictions…</p>}
 
+      <section className="routing-location-section">
+        <div className="routing-location-row">
+          <button
+            type="button"
+            className="btn btn-primary btn-lg routing-gps-btn"
+            onClick={applyGps}
+            disabled={geo.status === "requesting" || !isGeolocationSupported()}
+            aria-label="Use my current location"
+          >
+            {geo.status === "requesting" ? "Getting your location…" : "Use My Current Location"}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-outline btn-lg routing-map-btn${picking ? " is-active" : ""}`}
+            onClick={() => {
+              const next = !picking;
+              setPicking(next);
+              if (next) geo.reset();
+            }}
+            aria-pressed={picking}
+            aria-label="Pick on map"
+          >
+            {picking ? "Cancel picking" : "Pick on Map"}
+          </button>
+        </div>
+
+        <div className="location-panel" aria-live="polite">
+          {geo.status === "requesting" && (
+            <p className="location-status">Getting your location…</p>
+          )}
+          {geo.error && geo.status !== "requesting" && geo.status !== "success" && (
+            <div className="location-error">
+              <p>{geo.error}</p>
+              {isGeolocationSupported() && (
+                <button type="button" className="btn btn-outline btn-sm" onClick={applyGps}>
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+          {selectedLocation && geo.status !== "requesting" && !geo.error && (
+            <p className="location-status">
+              <span className="location-source">
+                Location from {locationSourceLabel(selectedLocation.source)}
+              </span>
+              : {selectedLocation.latitude.toFixed(5)}, {selectedLocation.longitude.toFixed(5)}
+              {selectedLocation.accuracy != null
+                ? ` · accuracy ±${Math.round(selectedLocation.accuracy)} m`
+                : ""}
+              {picking ? " — tap the map to set it." : ""}
+            </p>
+          )}
+          {!selectedLocation && geo.status !== "requesting" && !geo.error && (
+            <p className="muted">
+              Choose a location: use your current location, tap &ldquo;Pick on Map&rdquo;, or enter
+              coordinates below.
+            </p>
+          )}
+        </div>
+
+        <details className="manual-coords">
+          <summary>Enter coordinates manually</summary>
+          <div className="manual-coords-grid">
+            <div className="field">
+              <label htmlFor="manual-lat">Latitude</label>
+              <input
+                id="manual-lat"
+                type="number"
+                step="any"
+                min="-90"
+                max="90"
+                placeholder="e.g. 12.3125"
+                value={manualLat}
+                onChange={(event) => setManualLat(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="manual-lng">Longitude</label>
+              <input
+                id="manual-lng"
+                type="number"
+                step="any"
+                min="-180"
+                max="180"
+                placeholder="e.g. 76.635"
+                value={manualLng}
+                onChange={(event) => setManualLng(event.target.value)}
+              />
+            </div>
+            <button type="button" className="btn btn-outline manual-set-btn" onClick={applyManual}>
+              Set location
+            </button>
+          </div>
+          {manualError && <p className="error-text">{manualError}</p>}
+          <p className="muted">
+            Use coordinates you read from the map or a GPS device. The point must be inside the
+            networked city area shown on the map.
+          </p>
+        </details>
+
+        <div className="routing-resolve-row">
+          <button
+            type="button"
+            className="btn btn-primary btn-lg routing-resolve-btn"
+            disabled={!selectedLocation || !issueType || resolving}
+            onClick={() => {
+              if (!selectedLocation) return;
+              setPicking(false);
+              runResolve(selectedLocation.latitude, selectedLocation.longitude, issueType, onDate);
+            }}
+          >
+            {resolving ? "Resolving responsibility…" : "Resolve Responsibility"}
+          </button>
+          {(!selectedLocation || !issueType) && (
+            <p className="muted routing-resolve-hint">
+              {!issueType
+                ? "Select an issue type above first."
+                : "Choose a location to enable routing."}
+            </p>
+          )}
+        </div>
+      </section>
+
       <div className="gis-layout">
         <div className="card gis-map-card">
           <JurisdictionMap
@@ -316,12 +494,18 @@ export default function CitizenRoutingPage() {
             highlightCode={highlightCode}
             activeVersionLabels={activeVersions}
             onSelect={handleSelect}
+            interactive
+            picking={picking}
+            selectedLocation={selectedLocation}
+            focusLocation={focusLocation}
           />
           <MapLegend />
           <p className="muted gis-click-hint">
-            {issueType
-              ? `Click anywhere on the map to route "${issueType}" on ${onDate}.`
-              : "Pick an issue type first, then click the map."}
+            {picking
+              ? "Tap anywhere on the map to set your location."
+              : issueType
+                ? `Click anywhere on the map to route "${issueType}" on ${onDate}.`
+                : "Pick an issue type first, then set a location."}
           </p>
         </div>
 
@@ -385,7 +569,8 @@ export default function CitizenRoutingPage() {
         <div className="card rules-card">
           <h3>Decision table · {rules.length} rule{rules.length === 1 ? "" : "s"} in force for{" "}
             <code>{issueType}</code> on <code>{onDate}</code></h3>
-          <table className="rules-table">
+          <div className="table-scroll rules-table-wrap">
+            <table className="rules-table">
             <thead>
               <tr>
                 <th>Rule</th>
@@ -414,6 +599,7 @@ export default function CitizenRoutingPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -426,6 +612,12 @@ export default function CitizenRoutingPage() {
       </p>
     </section>
   );
+}
+
+function locationSourceLabel(source: SelectedLocation["source"]): string {
+  if (source === "gps") return "your current location";
+  if (source === "map") return "the map";
+  return "manual entry";
 }
 
 function RoutingResultView({ result }: { result: RoutingResult }) {

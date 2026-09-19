@@ -1,14 +1,21 @@
-import { useMemo, useRef } from "react";
-import type { MouseEvent } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type {
   GeoJsonGeometry,
   JurisdictionSummary,
   Position,
 } from "../../api/gisTypes";
+import type { SelectedLocation } from "../../lib/geolocation";
 
 const VIEW_W = 960;
 const VIEW_H = 600;
 const PAD = 48;
+
+const METERS_PER_DEG_LAT = 111320;
+
+const MIN_K = 1;
+const MAX_K = 14;
+const DRAG_SLOP = 5;
 
 const DEMO_BOUNDS = {
   minLon: 76.4,
@@ -22,6 +29,28 @@ interface Bounds {
   maxLon: number;
   minLat: number;
   maxLat: number;
+}
+
+interface ViewState {
+  x: number;
+  y: number;
+  k: number;
+}
+
+const VIEW_IDENTITY: ViewState = { x: 0, y: 0, k: 1 };
+
+function clampK(k: number): number {
+  return Math.min(MAX_K, Math.max(MIN_K, k));
+}
+
+function zoomAt(view: ViewState, vx: number, vy: number, factor: number): ViewState {
+  const nextK = clampK(view.k * factor);
+  const f = nextK / view.k;
+  return { k: nextK, x: vx + (view.x - vx) * f, y: vy + (view.y - vy) * f };
+}
+
+function viewToWorld(view: ViewState, vx: number, vy: number): { x: number; y: number } {
+  return { x: (vx - view.x) / view.k, y: (vy - view.y) / view.k };
 }
 
 interface ShapeSet {
@@ -49,6 +78,10 @@ interface MapProps {
   proposedGeometry?: GeoJsonGeometry | null;
   proposedLabel?: string | null;
   onSelect: (lat: number, lng: number) => void;
+  interactive?: boolean;
+  selectedLocation?: SelectedLocation | null;
+  focusLocation?: { lat: number; lng: number } | null;
+  picking?: boolean;
 }
 
 function collectCoords(coords: unknown, out: Position[]): void {
@@ -161,6 +194,27 @@ function overlayPaths(
   return paths;
 }
 
+function accuracyViewRadius(selected: SelectedLocation, b: Bounds): number {
+  if (selected.accuracy == null || selected.accuracy <= 0 || !Number.isFinite(selected.accuracy)) {
+    return 0;
+  }
+  const degLat = selected.accuracy / METERS_PER_DEG_LAT;
+  const degLon =
+    selected.accuracy / (METERS_PER_DEG_LAT * Math.cos((selected.latitude * Math.PI) / 180));
+  const c = project(selected.longitude, selected.latitude, b);
+  const rx = Math.abs(project(selected.longitude + degLon, selected.latitude, b).x - c.x);
+  const ry = Math.abs(project(selected.longitude, selected.latitude + degLat, b).y - c.y);
+  return Math.max(Math.max(rx, ry), 4);
+}
+
+function clampLat(lat: number): number {
+  return Math.min(90, Math.max(-90, lat));
+}
+
+function clampLon(lon: number): number {
+  return Math.min(180, Math.max(-180, lon));
+}
+
 export function JurisdictionMap({
   jurisdictions,
   areas,
@@ -171,8 +225,24 @@ export function JurisdictionMap({
   proposedGeometry,
   proposedLabel,
   onSelect,
+  interactive = false,
+  selectedLocation = null,
+  focusLocation = null,
+  picking = false,
 }: MapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [view, setView] = useState<ViewState>(VIEW_IDENTITY);
+  const viewRef = useRef<ViewState>(view);
+  viewRef.current = view;
+
+  const pointersRef = useRef(new Map<number, { vx: number; vy: number }>());
+  const gestureRef = useRef<{ mode: "none" | "pan" | "pinch"; moved: boolean; startVx: number; startVy: number }>({
+    mode: "none",
+    moved: false,
+    startVx: 0,
+    startVy: 0,
+  });
+  const lastFocusRef = useRef<string | null>(null);
 
   const bounds = useMemo(
     () => computeBounds(jurisdictions, areas, roads, proposedGeometry),
@@ -206,120 +276,334 @@ export function JurisdictionMap({
     return { areaPaths, roadPaths, wards, others, labels, proposed };
   }, [jurisdictions, areas, roads, bounds, highlightCode, proposedGeometry, proposedLabel]);
 
-  const handleClick = (event: MouseEvent<SVGSVGElement>) => {
+  const clientToView = (clientX: number, clientY: number): { vx: number; vy: number } => {
+    const svg = svgRef.current;
+    if (!svg) return { vx: 0, vy: 0 };
+    const rect = svg.getBoundingClientRect();
+    const scaleX = rect.width ? VIEW_W / rect.width : 1;
+    const scaleY = rect.height ? VIEW_H / rect.height : 1;
+    return { vx: (clientX - rect.left) * scaleX, vy: (clientY - rect.top) * scaleY };
+  };
+
+  const worldPosToLonLat = (wx: number, wy: number): { lat: number; lng: number } => {
+    const lon = bounds.minLon + ((wx - PAD) / (VIEW_W - 2 * PAD)) * (bounds.maxLon - bounds.minLon);
+    const lat = bounds.maxLat - ((wy - PAD) / (VIEW_H - 2 * PAD)) * (bounds.maxLat - bounds.minLat);
+    return { lat: clampLat(lat), lng: clampLon(lon) };
+  };
+
+  const handleClick = (event: ReactMouseEvent<SVGSVGElement>) => {
+    const { vx, vy } = clientToView(event.clientX, event.clientY);
+    const { lat, lng } = worldPosToLonLat(vx, vy);
+    onSelect(lat, lng);
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.button !== 0 && event.pointerType !== "touch") return;
+    svgRef.current?.setPointerCapture?.(event.pointerId);
+    const { vx, vy } = clientToView(event.clientX, event.clientY);
+    pointersRef.current.set(event.pointerId, { vx, vy });
+    const count = pointersRef.current.size;
+    if (count === 1) {
+      gestureRef.current.mode = "none";
+      gestureRef.current.moved = false;
+      gestureRef.current.startVx = vx;
+      gestureRef.current.startVy = vy;
+    } else if (count === 2) {
+      gestureRef.current.mode = "pinch";
+    }
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const prev = pointersRef.current.get(event.pointerId);
+    if (!prev) return;
+    const { vx, vy } = clientToView(event.clientX, event.clientY);
+    const g = gestureRef.current;
+    const pointers = pointersRef.current;
+
+    if (pointers.size === 1) {
+      const dx = vx - prev.vx;
+      const dy = vy - prev.vy;
+      pointersRef.current.set(event.pointerId, { vx, vy });
+      if (g.mode === "pan") {
+        setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+        return;
+      }
+      if (!g.moved && Math.hypot(vx - g.startVx, vy - g.startVy) > DRAG_SLOP) {
+        g.mode = "pan";
+        g.moved = true;
+      }
+      return;
+    }
+
+    if (pointers.size === 2) {
+      const entries = [...pointers.entries()];
+      const [idA, prevA] = entries[0];
+      const [idB, prevB] = entries[1];
+      const curA = idA === event.pointerId ? { vx, vy } : prevA;
+      const curB = idB === event.pointerId ? { vx, vy } : prevB;
+      pointersRef.current.set(event.pointerId, { vx, vy });
+      const prevDist = Math.hypot(prevB.vx - prevA.vx, prevB.vy - prevA.vy);
+      const curDist = Math.hypot(curB.vx - curA.vx, curB.vy - curA.vy);
+      if (prevDist > 0 && curDist > 0) {
+        const midX = (curA.vx + curB.vx) / 2;
+        const midY = (curA.vy + curB.vy) / 2;
+        setView((v) => zoomAt(v, midX, midY, curDist / prevDist));
+      }
+    }
+  };
+
+  const endPointer = (event: ReactPointerEvent<SVGSVGElement>, asTap: boolean) => {
+    const pointers = pointersRef.current;
+    const g = gestureRef.current;
+    const isTapCandidate = asTap && !g.moved && pointers.size === 1 && g.mode === "none";
+    pointers.delete(event.pointerId);
+    if (pointers.size === 0) {
+      if (isTapCandidate) {
+        const world = viewToWorld(viewRef.current, g.startVx, g.startVy);
+        const { lat, lng } = worldPosToLonLat(world.x, world.y);
+        onSelect(lat, lng);
+      }
+      gestureRef.current = { mode: "none", moved: false, startVx: 0, startVy: 0 };
+    } else if (pointers.size === 1) {
+      const [remaining] = [...pointers.values()];
+      gestureRef.current = {
+        mode: "none",
+        moved: false,
+        startVx: remaining.vx,
+        startVy: remaining.vy,
+      };
+    }
+  };
+
+  const handlePointerUp = (event: ReactPointerEvent<SVGSVGElement>) => endPointer(event, true);
+  const handlePointerCancel = (event: ReactPointerEvent<SVGSVGElement>) => endPointer(event, false);
+
+  useEffect(() => {
+    if (!interactive) return;
     const svg = svgRef.current;
     if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const vx = ((event.clientX - rect.left) / rect.width) * VIEW_W;
-    const vy = ((event.clientY - rect.top) / rect.height) * VIEW_H;
-    const lon = bounds.minLon + ((vx - PAD) / (VIEW_W - 2 * PAD)) * (bounds.maxLon - bounds.minLon);
-    const lat = bounds.maxLat - ((vy - PAD) / (VIEW_H - 2 * PAD)) * (bounds.maxLat - bounds.minLat);
-    const clampedLat = Math.min(90, Math.max(-90, lat));
-    const clampedLon = Math.min(180, Math.max(-180, lon));
-    onSelect(clampedLat, clampedLon);
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const { vx, vy } = clientToView(event.clientX, event.clientY);
+      const factor = Math.exp(-event.deltaY * 0.0015);
+      setView((v) => zoomAt(v, vx, vy, factor));
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [interactive]);
+
+  useEffect(() => {
+    if (!interactive || !focusLocation) return;
+    const key = `${focusLocation.lat.toFixed(6)},${focusLocation.lng.toFixed(6)}`;
+    if (lastFocusRef.current === key) return;
+    lastFocusRef.current = key;
+    const world = project(focusLocation.lng, focusLocation.lat, bounds);
+    setView((v) => {
+      const k = Math.max(v.k, 1.2);
+      return { k, x: VIEW_W / 2 - world.x * k, y: VIEW_H / 2 - world.y * k };
+    });
+  }, [interactive, focusLocation, bounds]);
+
+  const zoomBy = (factor: number) => {
+    setView((v) => zoomAt(v, VIEW_W / 2, VIEW_H / 2, factor));
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<SVGSVGElement>) => {
+    if (!interactive) return;
+    const step = 40;
+    switch (event.key) {
+      case "ArrowLeft":
+        event.preventDefault();
+        setView((v) => ({ ...v, x: v.x + step }));
+        break;
+      case "ArrowRight":
+        event.preventDefault();
+        setView((v) => ({ ...v, x: v.x - step }));
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        setView((v) => ({ ...v, y: v.y + step }));
+        break;
+      case "ArrowDown":
+        event.preventDefault();
+        setView((v) => ({ ...v, y: v.y - step }));
+        break;
+      case "+":
+      case "=":
+      case "PageUp":
+        event.preventDefault();
+        zoomBy(1.35);
+        break;
+      case "-":
+      case "PageDown":
+        event.preventDefault();
+        zoomBy(1 / 1.35);
+        break;
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        if (picking) {
+          const world = viewToWorld(viewRef.current, VIEW_W / 2, VIEW_H / 2);
+          const { lat, lng } = worldPosToLonLat(world.x, world.y);
+          onSelect(lat, lng);
+        }
+        break;
+    }
   };
 
   const probePos = probe ? project(probe.lng, probe.lat, bounds) : null;
+  const selectedPos = selectedLocation
+    ? project(selectedLocation.longitude, selectedLocation.latitude, bounds)
+    : null;
+  const selectedAccuracyR =
+    selectedLocation && selectedLocation.accuracy != null && selectedLocation.accuracy > 0
+      ? accuracyViewRadius(selectedLocation, bounds)
+      : 0;
 
   return (
-    <svg
-      ref={svgRef}
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="gis-map"
-      onClick={handleClick}
-      role="img"
-      aria-label="Jurisdiction map"
-    >
-      <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="#eaf3ee" />
+    <div className={`jurisdiction-map-shell${interactive ? " is-interactive" : ""}${picking ? " is-picking" : ""}`}>
+      {interactive && (
+        <div className="map-controls" aria-label="Map controls">
+          <button type="button" className="map-control-btn" onClick={() => zoomBy(1.35)} aria-label="Zoom in" title="Zoom in">
+            +
+          </button>
+          <button type="button" className="map-control-btn" onClick={() => zoomBy(1 / 1.35)} aria-label="Zoom out" title="Zoom out">
+            &minus;
+          </button>
+          <button type="button" className="map-control-btn" onClick={() => setView(VIEW_IDENTITY)} aria-label="Reset view" title="Reset view">
+            &times;
+          </button>
+        </div>
+      )}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        className="gis-map"
+        onClick={interactive ? undefined : handleClick}
+        onPointerDown={interactive ? handlePointerDown : undefined}
+        onPointerMove={interactive ? handlePointerMove : undefined}
+        onPointerUp={interactive ? handlePointerUp : undefined}
+        onPointerCancel={interactive ? handlePointerCancel : undefined}
+        onKeyDown={interactive ? handleKeyDown : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        role="img"
+        aria-label={
+          interactive
+            ? "Interactive jurisdiction map. Drag or use arrow keys to pan, scroll or pinch to zoom, tap to select a location."
+            : "Jurisdiction map"
+        }
+      >
+        <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="#eaf3ee" />
 
-      {layers.areaPaths.map((d, i) => (
-        <path key={`a${i}`} d={d} fill="rgba(79,70,229,0.10)" stroke="#4f46e5" strokeWidth={1.5} />
-      ))}
+        <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          {layers.areaPaths.map((d, i) => (
+            <path key={`a${i}`} d={d} fill="rgba(79,70,229,0.10)" stroke="#4f46e5" strokeWidth={1.5} />
+          ))}
 
-      {layers.wards.map((w, i) => (
-        <path
-          key={`w${i}`}
-          d={w.d}
-          fill={w.fill}
-          stroke={w.highlight ? "#111827" : w.stroke}
-          strokeWidth={w.highlight ? 3 : 2}
-          opacity={w.highlight ? 1 : 0.75}
-        />
-      ))}
-
-      {layers.others.map((o, i) => (
-        <path
-          key={`o${i}`}
-          d={o.d}
-          fill={o.fill}
-          stroke={o.stroke}
-          strokeWidth={2}
-          strokeDasharray={o.dash}
-        />
-      ))}
-
-      {layers.roadPaths.map((d, i) => (
-        <path
-          key={`r${i}`}
-          d={d}
-          fill="none"
-          stroke="#15803d"
-          strokeWidth={5}
-          strokeLinecap="round"
-          opacity={0.85}
-        />
-      ))}
-
-      {layers.proposed && (
-        <>
-          {layers.proposed.paths.map((d, i) => (
+          {layers.wards.map((w, i) => (
             <path
-              key={`p${i}`}
-              d={d}
-              fill="rgba(124,58,237,0.08)"
-              stroke="#7c3aed"
-              strokeWidth={2.5}
-              strokeDasharray="10 6"
+              key={`w${i}`}
+              d={w.d}
+              fill={w.fill}
+              stroke={w.highlight ? "#111827" : w.stroke}
+              strokeWidth={w.highlight ? 3 : 2}
+              opacity={w.highlight ? 1 : 0.75}
             />
           ))}
-          {layers.proposed.polylines.map((d, i) => (
-            <path key={`pl${i}`} d={d} fill="none" stroke="#7c3aed" strokeWidth={2.5} strokeDasharray="10 6" />
+
+          {layers.others.map((o, i) => (
+            <path
+              key={`o${i}`}
+              d={o.d}
+              fill={o.fill}
+              stroke={o.stroke}
+              strokeWidth={2}
+              strokeDasharray={o.dash}
+            />
           ))}
-          {layers.proposed.points.map((p, i) => {
-            const pos = project(p[0], p[1], bounds);
-            return <circle key={`pp${i}`} cx={pos.x} cy={pos.y} r={5} fill="#7c3aed" />;
-          })}
-          {layers.proposed.label && (
-            <text
-              x={layers.proposed.label.x}
-              y={layers.proposed.label.y}
-              textAnchor="middle"
-              className="gis-label gis-label-proposed"
-            >
-              {layers.proposed.label.text}
-            </text>
+
+          {layers.roadPaths.map((d, i) => (
+            <path
+              key={`r${i}`}
+              d={d}
+              fill="none"
+              stroke="#15803d"
+              strokeWidth={5}
+              strokeLinecap="round"
+              opacity={0.85}
+            />
+          ))}
+
+          {layers.proposed && (
+            <>
+              {layers.proposed.paths.map((d, i) => (
+                <path
+                  key={`p${i}`}
+                  d={d}
+                  fill="rgba(124,58,237,0.08)"
+                  stroke="#7c3aed"
+                  strokeWidth={2.5}
+                  strokeDasharray="10 6"
+                />
+              ))}
+              {layers.proposed.polylines.map((d, i) => (
+                <path key={`pl${i}`} d={d} fill="none" stroke="#7c3aed" strokeWidth={2.5} strokeDasharray="10 6" />
+              ))}
+              {layers.proposed.points.map((p, i) => {
+                const pos = project(p[0], p[1], bounds);
+                return <circle key={`pp${i}`} cx={pos.x} cy={pos.y} r={5} fill="#7c3aed" />;
+              })}
+              {layers.proposed.label && (
+                <text
+                  x={layers.proposed.label.x}
+                  y={layers.proposed.label.y}
+                  textAnchor="middle"
+                  className="gis-label gis-label-proposed"
+                >
+                  {layers.proposed.label.text}
+                </text>
+              )}
+            </>
           )}
-        </>
-      )}
 
-      {layers.labels.map((l, i) => (
-        <text key={`l${i}`} x={l.x} y={l.y} textAnchor="middle" className="gis-label">
-          {l.text}
-        </text>
-      ))}
+          {layers.labels.map((l, i) => (
+            <text key={`l${i}`} x={l.x} y={l.y} textAnchor="middle" className="gis-label">
+              {l.text}
+            </text>
+          ))}
 
-      {probePos && (
-        <>
-          <circle cx={probePos.x} cy={probePos.y} r={10} fill="rgba(220,38,38,0.25)" />
-          <circle cx={probePos.x} cy={probePos.y} r={4} fill="#dc2626" stroke="#ffffff" strokeWidth={1.5} />
-        </>
-      )}
+          {probePos && (
+            <>
+              <circle cx={probePos.x} cy={probePos.y} r={10} fill="rgba(220,38,38,0.25)" />
+              <circle cx={probePos.x} cy={probePos.y} r={4} fill="#dc2626" stroke="#ffffff" strokeWidth={1.5} />
+            </>
+          )}
 
-      {activeVersionLabels.length > 0 && (
-        <text x={VIEW_W - PAD} y={PAD - 8} textAnchor="end" className="gis-version">
-          {activeVersionLabels.join(" · ")}
-        </text>
-      )}
-    </svg>
+          {selectedPos && (
+            <g className="gis-selected-location">
+              {selectedAccuracyR > 0 && (
+                <circle
+                  cx={selectedPos.x}
+                  cy={selectedPos.y}
+                  r={selectedAccuracyR}
+                  fill="rgba(37,99,235,0.12)"
+                  stroke="rgba(37,99,235,0.5)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                />
+              )}
+              <circle cx={selectedPos.x} cy={selectedPos.y} r={11} fill="rgba(29,78,216,0.25)" />
+              <circle cx={selectedPos.x} cy={selectedPos.y} r={5} fill="#1d4ed8" stroke="#ffffff" strokeWidth={2} />
+            </g>
+          )}
+        </g>
+
+        {activeVersionLabels.length > 0 && (
+          <text x={VIEW_W - PAD} y={PAD - 8} textAnchor="end" className="gis-version">
+            {activeVersionLabels.join(" · ")}
+          </text>
+        )}
+      </svg>
+    </div>
   );
 }

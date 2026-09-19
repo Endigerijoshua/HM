@@ -51,9 +51,9 @@ function BackendDot() {
   return <span className={`backend-dot backend-dot-${state.kind}`} title={title} aria-label={title} />;
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" id="sidebar-nav">
       <div className="brand">
         <div className="brand-mark" />
         <div>
@@ -68,6 +68,7 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
+            onClick={onNavigate}
             className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
           >
             {item.label}
