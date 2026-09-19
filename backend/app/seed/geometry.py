@@ -12,39 +12,31 @@ import random
 from shapely.geometry import Point, Polygon
 NH_CORRIDOR = Polygon(
     [
-        (76.6*2 + 0.0328, 12.335),
-        (76.64, 12.335),
-        (76.64 + 0.0142, 12.335),
+        (76.56, 12.335),
+        (76.72, 12.335),
+        (76.72, 12.339),
+        (76.56, 12.339),
     ]
 )
 
 # ---------------------------------------------------------------------------
 # Heritage precinct + PROPOSED overlay (P3 what-if simulator)
+#
+# ``HERITAGE_ZONE`` is the live heritage precinct boundary seeded in
+# ``seed_runner._seed_jurisdictions``. ``HERITAGE_ZONE_EXPANDED`` is the
+# deterministic *proposed* overlay boundary the P3 what-if simulator resolves
+# against; it is deliberately read-only and is never written to the live
+# ``jurisdictions`` table.
 # ---------------------------------------------------------------------------
-# The live heritage precinct watches the seeded ``HERITAGE_ZONE`` (see
-# ``app.seed.seed_runner._seed_jurisdictions``). P3 what-if scenarios resolve
-# against a *proposed* expanded preserve — ``HERITAGE_ZONE_EXPANDED`` — which
-# is deterministic, isolated from the live ``jurisdictions`` table (no row is
-# ever created or mutated) and used only to compute proposed deltas.
 HERITAGE_ZONE = Polygon(
-    [
-        (76.62, 12.305),
-        (76.65, 12.305),
-        (76.65, 12.32),
-        (76.62, 12.32),
-    ]
+    [(76.6328, 12.298), (76.6542, 12.298), (76.6542, 12.3082), (76.6328, 12.3082)]
 )
 
-# Deterministic expansion of HERITAGE_ZONE used by what-if simulation. Same
-# center (76.635, 12.3125); each edge pushed outward by a fixed quarter degree
-# cell so the demo "proposed heritage preserve" is visually distinct from the
-# live zone yet derived purely from it.
+
 HERITAGE_ZONE_EXPANDED = Polygon(
     [
-        (76.615, 12.30),
-        (76.655, 12.30),
-        (76.655, 12.325),
-        (76.615, 12.325),
+        (76.629, 12.295), (76.658, 12.295), (76.658, 12.311),
+        (76.629, 12.311),
     ]
 )
 
@@ -56,21 +48,6 @@ class Mosaic:
     n_rows: int
     n_cols: int
     grid: dict[int, Polygon]
-
-    @property
-    def cells(self) -> dict[tuple[int, int], Polygon]:
-        """Derive the ``(row, col)``-addressed view of the underlying ``grid``.
-
-        The flat ``grid`` is keyed ``row * n_cols + col``; this read-only view
-        restores the 2-D ``(row, col)`` addressing that ``seed_runner`` uses to
-        enumerate cells in deterministic sorted order, without mutating the
-        stored ``grid`` contract.
-        """
-        return {
-            (row, col): self.grid[row * self.n_cols + col]
-            for row in range(self.n_rows)
-            for col in range(self.n_cols)
-        }
 
     @property
     def cells(self) -> dict[tuple[int, int], Polygon]:
@@ -133,14 +110,15 @@ def find_flip_point_between(
 ) -> tuple[float, float]:
     """Deterministically return a ``(lon, lat)`` whose covering ``(row, col)``
     cell differs between the V1 and V2 mosaics, if one exists; otherwise an
-    interior point of the first V1 cell. The two demo mosaics are geometrically
-    congruent (they share the same bbox fractions), so this never loops without
-    bound and is fully reproducible for a given seeded ``rng``.
+    interior point of the first V1 cell. Probing is bounded (64 draws per cell
+    against the sorted V2 cells) and falls back to a seeded interior point
+    of the first V1 cell, so it always terminates and is fully reproducible for
+    a given seeded ``rng``.
     """
     ordered_v2 = sorted(cells_v2.items())
     for (row1, col1), cell1 in sorted(cells_v1.items()):
         minx, miny, maxx, maxy = cell1.bounds
-        for _ in range(8):
+        for _ in range(64):
             px = minx + (maxx - minx) * rng.random()
             py = miny + (maxy - miny) * rng.random()
             probe = Point(px, py)
@@ -149,7 +127,6 @@ def find_flip_point_between(
             for (row2, col2), cell2 in ordered_v2:
                 if cell2.covers(probe) and (row2, col2) != (row1, col1):
                     return (float(px), float(py))
-            break
     (_, _), fallback_cell = sorted(cells_v1.items())[0]
     minx, miny, maxx, maxy = fallback_cell.bounds
     while True:
@@ -157,29 +134,6 @@ def find_flip_point_between(
         py = miny + (maxy - miny) * rng.random()
         if fallback_cell.covers(Point(px, py)):
             return (float(px), float(py))
-
-
-# ---------------------------------------------------------------------------
-# HERITAGE ZONE + PROPOSED EXPANSION (P3 what-if simulator)
-#
-# ``HERITAGE_ZONE`` is the live heritage precinct boundary seeded in
-# ``seed_runner._seed_jurisdictions``. ``HERITAGE_ZONE_EXPANDED`` is the
-# deterministic *proposed* overlay boundary the P3 what-if simulator resolves
-# against; it is deliberately read-only and is never written to the live
-# ``jurisdictions`` table.
-# ---------------------------------------------------------------------------
-
-HERITAGE_ZONE = Polygon(
-    [(76.6328, 12.298), (76.6542, 12.298), (76.6542, 12.3082), (76.6328, 12.3082)]
-)
-
-
-HERITAGE_ZONE_EXPANDED = Polygon(
-    [
-        (76.629, 12.295), (76.658, 12.295), (76.658, 12.311),
-        (76.629, 12.311),
-    ]
-)
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +145,62 @@ HERITAGE_ZONE_EXPANDED = Polygon(
 # are never persisted as a real spatial boundary anywhere.
 # ---------------------------------------------------------------------------
 WARD_MINX = 76.59
-WARD_MINY = 12.27
+WARD_MINY = 12.22
 WARD_MAXX = 76.68
-WARD_MAXY = 12.34
+WARD_MAXY = 12.335
+
+# The two demo delimitations are sliced differently on purpose:
+# * V1 (DELIM-2020) is a plain uniform 3x3 grid over the ward bbox.
+# * V2 (DELIM-2024) keeps the west column's rows anchored at 12.22 but lifts
+#   the east columns' south edge to 12.27 (a staircase): the 12.22-12.27 band
+#   east of the west column falls between cells, which is exactly the
+#   deterministic no-jurisdiction pocket (C-1004) the demo documents. The
+#   shifted column cuts also re-slice the grid so some coordinates change ward
+#   between the versions - the seeded "flip point" premise.
+WARD_V1_COL_CUTS = (76.59, 76.62, 76.65, 76.68)
+WARD_V1_ROW_CUTS = (12.22, 12.293333333333333, 12.316666666666666, 12.335)
+WARD_V2_COL_CUTS = (76.59, 76.617, 76.649, 76.68)
+WARD_V2_WEST_ROW_CUTS = (12.22, 12.293333333333333, 12.316666666666666, 12.335)
+WARD_V2_EAST_ROW_CUTS = (12.27, 12.293333333333333, 12.316666666666666, 12.335)
+
+
+def build_ward_mosaic(
+    col_cuts: tuple[float, ...], row_cuts: dict[int, tuple[float, ...]]
+) -> Mosaic:
+    """Build a 3x3 ward mosaic with per-column row cuts.
+
+    ``row_cuts`` maps each column index to the row-cut tuple that slices that
+    column's cells. Columns may therefore start their rows at different south
+    edges (the V2 staircase), while cell addressing stays ``(row, col)``.
+    """
+    n_cols = len(col_cuts) - 1
+    n_rows = len(next(iter(row_cuts.values()))) - 1
+    cells: dict[int, Polygon] = {}
+    for col in range(n_cols):
+        cuts = row_cuts[col]
+        for row in range(n_rows):
+            cells[row * n_cols + col] = Polygon(
+                [
+                    (col_cuts[col], cuts[row]),
+                    (col_cuts[col + 1], cuts[row]),
+                    (col_cuts[col + 1], cuts[row + 1]),
+                    (col_cuts[col], cuts[row + 1]),
+                ]
+            )
+    return Mosaic(n_rows=n_rows, n_cols=n_cols, grid=cells)
+
+
+def build_v1_ward_mosaic() -> Mosaic:
+    """Uniform grid for the DELIM-2020 ward layout."""
+    return build_ward_mosaic(
+        WARD_V1_COL_CUTS,
+        {0: WARD_V1_ROW_CUTS, 1: WARD_V1_ROW_CUTS, 2: WARD_V1_ROW_CUTS},
+    )
+
+
+def build_v2_ward_mosaic() -> Mosaic:
+    """Staircase grid for the DELIM-2024 ward layout (east columns lifted)."""
+    return build_ward_mosaic(
+        WARD_V2_COL_CUTS,
+        {0: WARD_V2_WEST_ROW_CUTS, 1: WARD_V2_EAST_ROW_CUTS, 2: WARD_V2_EAST_ROW_CUTS},
+    )

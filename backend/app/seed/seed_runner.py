@@ -39,11 +39,8 @@ from app.db.models import (
 from app.gis.shapely_provider import ShapelyGeometryProvider
 from app.seed.geometry import (
     NH_CORRIDOR,
-    WARD_MAXX,
-    WARD_MAXY,
-    WARD_MINX,
-    WARD_MINY,
-    build_mosaic,
+    build_v1_ward_mosaic,
+    build_v2_ward_mosaic,
     find_flip_point,
     find_flip_point_between,
 )
@@ -334,10 +331,10 @@ def _geometry_payload(geometry) -> tuple[str, bytes, str]:
 
 def _flip_coords() -> tuple[float, float]:
     """Recompute the deterministic coordinate whose ward differs V1 vs V2."""
-    mosaic_v1 = build_mosaic(WARD_MINX, WARD_MINY, WARD_MAXX, WARD_MAXY, 3, 3, seed=MOSAIC_V1_SEED)
-    mosaic_v2 = build_mosaic(WARD_MINX, WARD_MINY, WARD_MAXX, WARD_MAXY, 3, 3, seed=MOSAIC_V2_SEED)
     return find_flip_point_between(
-        mosaic_v1.cells, mosaic_v2.cells, Random(FLIP_RNG_SEED)
+        build_v1_ward_mosaic().cells,
+        build_v2_ward_mosaic().cells,
+        Random(FLIP_RNG_SEED),
     )
 
 
@@ -463,8 +460,8 @@ def _seed_jurisdictions(session, authorities, versions) -> dict:
     v1 = versions["DELIM-2020"].id
     v2 = versions["DELIM-2024"].id
 
-    mosaic_v1 = build_mosaic(WARD_MINX, WARD_MINY, WARD_MAXX, WARD_MAXY, 3, 3, seed=MOSAIC_V1_SEED)
-    mosaic_v2 = build_mosaic(WARD_MINX, WARD_MINY, WARD_MAXX, WARD_MAXY, 3, 3, seed=MOSAIC_V2_SEED)
+    mosaic_v1 = build_v1_ward_mosaic()
+    mosaic_v2 = build_v2_ward_mosaic()
 
     by_code: dict = {}
 
