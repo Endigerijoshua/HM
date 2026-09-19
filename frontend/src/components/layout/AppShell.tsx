@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
+import { ViewToggle } from "./ViewToggle";
 
 export function AppShell() {
   const [navOpen, setNavOpen] = useState(false);
@@ -29,6 +30,7 @@ export function AppShell() {
           </span>
           Menu
         </button>
+        <ViewToggle />
         <div
           className={`nav-backdrop${navOpen ? " is-visible" : ""}`}
           aria-hidden="true"

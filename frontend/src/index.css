@@ -2508,3 +2508,317 @@ letter-spacing: 0.05em;
     max-height: 480px;
   }
 }
+
+/* ---- Citizen / Admin view toggle ---- */
+.view-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.view-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.view-toggle-btn:hover {
+  color: var(--ink);
+}
+
+.view-toggle-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.content > .view-toggle {
+  margin: 0 0 20px;
+}
+
+@media (max-width: 720px) {
+  .view-toggle {
+    display: flex;
+    width: 100%;
+  }
+
+  .view-toggle-btn {
+    flex: 1 1 0;
+  }
+}
+
+/* ---- Citizen view shell ---- */
+.app-view-citizen {
+  grid-template-columns: 1fr;
+}
+
+.citizen-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.citizen-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.citizen-brand .brand-title {
+  color: var(--ink);
+  padding: 0;
+}
+
+.citizen-brand .brand-sub {
+  color: var(--ink-muted);
+  padding: 0;
+}
+
+.citizen-content {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 32px 64px;
+}
+
+@media (max-width: 720px) {
+  .citizen-bar {
+    padding: 12px 16px;
+  }
+
+  .citizen-content {
+    padding: 26px 16px 48px;
+  }
+}
+
+/* ---- Citizen Routing: decluttered flow ---- */
+.citizen-page .page-header {
+  margin-bottom: 30px;
+}
+
+.citizen-page .page-header h1 {
+  font-size: 30px;
+}
+
+.citizen-page .page-header p {
+  margin-bottom: 0;
+  font-size: 15px;
+}
+
+.route-step {
+  margin-bottom: 32px;
+  padding: 24px 26px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.route-step-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.route-step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.route-step-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.route-inputs {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.route-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.route-field label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.route-field select,
+.route-field input[type="date"] {
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 230px;
+}
+
+.route-field select {
+  max-width: 380px;
+}
+
+.route-field input[type="date"] {
+  min-width: 200px;
+}
+
+.route-count {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+}
+
+.route-presets {
+  margin-top: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.route-presets summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.route-presets[open] summary {
+  margin-bottom: 4px;
+}
+
+.route-presets-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.route-presets-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-presets-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.route-map-card {
+  margin-top: 16px;
+}
+
+.route-resolve-row {
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.route-resolve-row .routing-resolve-btn {
+  padding: 14px 44px;
+  font-size: 16px;
+  min-height: 52px;
+  border-radius: 12px;
+}
+
+.route-result-step .route-result-empty {
+  padding: 10px 0;
+}
+
+.route-extra {
+  margin-top: 16px;
+}
+
+.route-extra summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.route-extra .replay-links {
+  margin-top: 6px;
+}
+
+.route-advanced {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px 18px 18px;
+}
+
+.route-advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 4px 0;
+}
+
+.route-advanced > summary:hover {
+  color: var(--accent);
+}
+
+.route-advanced[open] > summary {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 720px) {
+  .route-step {
+    padding: 18px 14px;
+  }
+
+  .route-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .route-field select,
+  .route-field input[type="date"] {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .route-resolve-row {
+    flex-direction: column;
+  }
+
+  .route-resolve-row .routing-resolve-btn {
+    width: 100%;
+  }
+}

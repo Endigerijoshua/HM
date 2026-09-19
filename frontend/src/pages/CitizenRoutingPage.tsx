@@ -15,6 +15,7 @@ import { ResponsibilityGraph } from "../components/graph/ResponsibilityGraph";
 import { CivicMap } from "../components/map/CivicMap";
 import { RoutingExplanation } from "../components/routing/RoutingExplanation";
 import { DemoFlowBar } from "../components/DemoFlowBar";
+import { useViewMode } from "../components/layout/ViewContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 import {
   isGeolocationSupported,
@@ -71,6 +72,7 @@ const STATUS_TONE: Record<RoutingStatus, string> = {
 };
 
 export default function CitizenRoutingPage() {
+  const { view } = useViewMode();
   const [onDate, setOnDate] = useState(DEFAULT_DATE);
   const [issueType, setIssueType] = useState("");
   const [issueTypes, setIssueTypes] = useState<IssueTypeSummary[]>([]);
@@ -300,78 +302,96 @@ export default function CitizenRoutingPage() {
   const highlightCode = result?.jurisdiction_code ?? null;
 
   return (
-    <section className="page">
-      <header className="page-header">
+    <section className="page citizen-page">
+      <header className="page-header citizen-header">
         <h1>Citizen Routing</h1>
-        <p>
-          Pick a location, an issue and a date to attribute civic responsibility:
-          the engine returns the authority, department and service that must act —
-          with a step-by-step escalation path and a "why this route?" explanation.
-        </p>
+        <p>Tell us what the issue is, where it is, and when — we'll tell you who must act.</p>
       </header>
 
-      {demoMode && <DemoFlowBar active="route" />}
-
-      <div className="gis-toolbar">
-        <div className="gis-toolbar-item">
-          <label htmlFor="issue-type">Issue</label>
-          <select
-            id="issue-type"
-            value={issueType}
-            onChange={(event) => setIssueType(event.target.value)}
-          >
-            <option value="">Select an issue…</option>
-            {categories.map((category) => (
-              <optgroup key={category} label={category}>
-                {issueTypes
-                  .filter((t) => t.category === category)
-                  .map((t) => (
-                    <option key={t.code} value={t.code}>
-                      {t.name} · {t.code}
-                    </option>
-                  ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <div className="gis-toolbar-item">
-          <label htmlFor="on-date">Effective date</label>
-          <input
-            id="on-date"
-            type="date"
-            min={MIN_DATE}
-            max={MAX_DATE}
-            value={onDate}
-            onChange={(event) => setOnDate(event.target.value)}
-          />
-        </div>
-        <div className="gis-quick">
-          {QUICK_DATES.map((q) => (
-            <button key={q.date} className="chip" onClick={() => setOnDate(q.date)}>
-              {q.label}
-            </button>
-          ))}
-        </div>
-        <div className="gis-quick">
-          {SCENARIOS.map((s) => (
-            <button
-              key={s.label}
-              className="chip"
-              onClick={() => handleScenario(s.issue, s.point)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        {state.kind === "ok" && (
-          <span className="gis-count">{jurisdictions.length} jurisdictions in force</span>
-        )}
-      </div>
+      {view === "admin" && demoMode && <DemoFlowBar active="route" />}
 
       {state.kind === "error" && <p className="error-text">{state.message}</p>}
-      {state.kind === "loading" && <p className="muted">Loading jurisdictions…</p>}
+      {state.kind === "loading" && <p className="muted">Loading Mysuru map data…</p>}
 
-      <section className="routing-location-section">
+      <section className="route-step">
+        <div className="route-step-head">
+          <span className="route-step-no">1</span>
+          <h2>Describe the issue</h2>
+        </div>
+        <div className="route-inputs">
+          <div className="route-field">
+            <label htmlFor="issue-type">Issue type</label>
+            <select
+              id="issue-type"
+              value={issueType}
+              onChange={(event) => setIssueType(event.target.value)}
+            >
+              <option value="">Select an issue…</option>
+              {categories.map((category) => (
+                <optgroup key={category} label={category}>
+                  {issueTypes
+                    .filter((t) => t.category === category)
+                    .map((t) => (
+                      <option key={t.code} value={t.code}>
+                        {t.name} · {t.code}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div className="route-field">
+            <label htmlFor="on-date">On this date</label>
+            <input
+              id="on-date"
+              type="date"
+              min={MIN_DATE}
+              max={MAX_DATE}
+              value={onDate}
+              onChange={(event) => setOnDate(event.target.value)}
+            />
+          </div>
+        </div>
+        {state.kind === "ok" && (
+          <p className="muted route-count">{jurisdictions.length} jurisdictions in force on {onDate}</p>
+        )}
+        <details className="route-presets">
+          <summary>Example presets</summary>
+          <div className="route-presets-grid">
+            <div className="route-presets-col">
+              <span className="route-presets-label">Dates</span>
+              <div className="gis-quick">
+                {QUICK_DATES.map((q) => (
+                  <button key={q.date} className="chip" onClick={() => setOnDate(q.date)}>
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="route-presets-col">
+              <span className="route-presets-label">Scenarios</span>
+              <div className="gis-quick">
+                {SCENARIOS.map((s) => (
+                  <button
+                    key={s.label}
+                    className="chip"
+                    onClick={() => handleScenario(s.issue, s.point)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section className="route-step">
+        <div className="route-step-head">
+          <span className="route-step-no">2</span>
+          <h2>Pin the location</h2>
+        </div>
+
         <div className="routing-location-row">
           <button
             type="button"
@@ -415,16 +435,28 @@ export default function CitizenRoutingPage() {
           )}
           {!selectedLocation && geo.status !== "requesting" && !geo.error && (
             <p className="muted">
-              Select a location on the Mysuru map, use your current location, or enter coordinates
-              below.
+              Tap the map below, or use your current location.
             </p>
           )}
         </div>
 
-        <div className="routing-map-hint">
-          <strong>Select a location on the Mysuru map:</strong> click or tap a street, or use your
-          current location. Beware coordinates you read elsewhere must be within the supported
-          Mysuru civic dataset.
+        <div className="route-map-card">
+          <CivicMap
+            jurisdictions={jurisdictions}
+            areas={areas}
+            roads={roads}
+            probe={probe}
+            highlightCode={highlightCode}
+            activeVersionLabels={activeVersions}
+            selectedLocation={selectedLocation}
+            focusLocation={focusLocation}
+            onSelect={handleSelect}
+          />
+          <p className="muted gis-click-hint">
+            {issueType
+              ? `Click any street or location on the map to route "${issueType}" on ${onDate}.`
+              : "Select an issue type first, then click a location on the map."}
+          </p>
         </div>
 
         <details className="manual-coords">
@@ -467,7 +499,7 @@ export default function CitizenRoutingPage() {
           </p>
         </details>
 
-        <div className="routing-resolve-row">
+        <div className="routing-resolve-row route-resolve-row">
           <button
             type="button"
             className="btn btn-primary btn-lg routing-resolve-btn"
@@ -489,39 +521,24 @@ export default function CitizenRoutingPage() {
         </div>
       </section>
 
-      <div className="gis-layout">
-        <div className="card gis-map-card">
-          <CivicMap
-            jurisdictions={jurisdictions}
-            areas={areas}
-            roads={roads}
-            probe={probe}
-            highlightCode={highlightCode}
-            activeVersionLabels={activeVersions}
-            selectedLocation={selectedLocation}
-            focusLocation={focusLocation}
-            onSelect={handleSelect}
-          />
-          <p className="muted gis-click-hint">
-            {issueType
-              ? `Click any street or location on the map to route "${issueType}" on ${onDate}.`
-              : "Select an issue type first, then click a location on the map."}
-          </p>
+      <section className="route-step route-result-step" aria-live="polite">
+        <div className="route-step-head">
+          <span className="route-step-no">3</span>
+          <h2>The responsible authority</h2>
         </div>
-
-        <div className="card gis-result-card">
-          <h3>Routing result</h3>
-          {resolving && <p className="muted">Resolving responsibility…</p>}
-          {resultError && <p className="error-text">{resultError}</p>}
-          {!resolving && !resultError && !result && (
-            <p className="muted">
-              Choose a scenario chip or click a location on the map to route an issue.
-            </p>
-          )}
-          {!resolving && !resultError && result && (
-            <>
-              <RoutingResultView result={result} />
-              <RoutingExplanation result={result} />
+        {resolving && <p className="muted">Resolving responsibility…</p>}
+        {resultError && <p className="error-text">{resultError}</p>}
+        {!resolving && !resultError && !result && (
+          <p className="muted route-result-empty">
+            No result yet — describe the issue, pin a location, then press Resolve.
+          </p>
+        )}
+        {!resolving && !resultError && result && (
+          <div className="route-result-card">
+            <RoutingResultView result={result} />
+            <RoutingExplanation result={result} />
+            <details className="route-extra">
+              <summary>Explore further</summary>
               <div className="replay-links">
                 <Link
                   className="btn btn-outline"
@@ -536,80 +553,75 @@ export default function CitizenRoutingPage() {
                   Open in Historical Explorer
                 </Link>
               </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {graphError && <p className="error-text">{graphError}</p>}
-      {graph && (
-        <div className="card resp-graph-card">
-          <div className="resp-graph-head">
-            <h3>Why this route? · Responsibility Graph</h3>
-            {graph.routing_id !== null && (
-              <span className="muted">Routing audit #{graph.routing_id}</span>
-            )}
+            </details>
           </div>
-          <p className="resp-graph-status">
-            Routing status:{" "}
-            <span
-              className={`result-status ${
-                (STATUS_TONE as Record<string, string>)[graph.status] ?? "muted-tag"
-              }`}
-            >
-              {graph.status}
-            </span>
-          </p>
-          <p className="why-route">{graph.explanation}</p>
-          <ResponsibilityGraph data={graph} />
-        </div>
-      )}
+        )}
+      </section>
 
-      {rules.length > 0 && (
-        <div className="card rules-card">
-          <h3>Decision table · {rules.length} rule{rules.length === 1 ? "" : "s"} in force for{" "}
-            <code>{issueType}</code> on <code>{onDate}</code></h3>
-          <div className="table-scroll rules-table-wrap">
-            <table className="rules-table">
-            <thead>
-              <tr>
-                <th>Rule</th>
-                <th>Scope</th>
-                <th>Prio</th>
-                <th>In force</th>
-                <th>Authority → Service</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.map((rule) => (
-                <tr key={rule.id}>
-                  <td>
-                    <code>{rule.code}</code>
-                  </td>
-                  <td>{rule.scope}</td>
-                  <td>{rule.priority}</td>
-                  <td>
-                    {rule.effective_from}
-                    {rule.effective_to ? ` → ${rule.effective_to}` : " → open"}
-                  </td>
-                  <td>
-                    {rule.authority_code} → {rule.service_code}
-                  </td>
+      <details className="route-advanced">
+        <summary>Engine details · graph &amp; decision rules</summary>
+        {graphError && <p className="error-text">{graphError}</p>}
+        {graph && (
+          <div className="card resp-graph-card">
+            <div className="resp-graph-head">
+              <h3>Why this route? · Responsibility Graph</h3>
+              {graph.routing_id !== null && (
+                <span className="muted">Routing audit #{graph.routing_id}</span>
+              )}
+            </div>
+            <p className="resp-graph-status">
+              Routing status:{" "}
+              <span
+                className={`result-status ${
+                  (STATUS_TONE as Record<string, string>)[graph.status] ?? "muted-tag"
+                }`}
+              >
+                {graph.status}
+              </span>
+            </p>
+            <p className="why-route">{graph.explanation}</p>
+            <ResponsibilityGraph data={graph} />
+          </div>
+        )}
+
+        {rules.length > 0 && (
+          <div className="card rules-card">
+            <h3>Decision table · {rules.length} rule{rules.length === 1 ? "" : "s"} in force for{" "}
+              <code>{issueType}</code> on <code>{onDate}</code></h3>
+            <div className="table-scroll rules-table-wrap">
+              <table className="rules-table">
+              <thead>
+                <tr>
+                  <th>Rule</th>
+                  <th>Scope</th>
+                  <th>Prio</th>
+                  <th>In force</th>
+                  <th>Authority → Service</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rules.map((rule) => (
+                  <tr key={rule.id}>
+                    <td>
+                      <code>{rule.code}</code>
+                    </td>
+                    <td>{rule.scope}</td>
+                    <td>{rule.priority}</td>
+                    <td>
+                      {rule.effective_from}
+                      {rule.effective_to ? ` → ${rule.effective_to}` : " → open"}
+                    </td>
+                    <td>
+                      {rule.authority_code} → {rule.service_code}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
           </div>
-        </div>
-      )}
-
-      <p className="muted gis-demohint">
-        Tip: the construction-waste scenario on W-05 (V2) deliberately triggers two equal-priority
-        jurisdiction rules → <code>RESPONSIBILITY_UNRESOLVED</code>. Try the same issue on any other
-        V2 ward to see it resolve. Replay garbage collection on the flip point across V1/V2 to watch
-        the rule change from <code>RULE-GARBAGE-PRE2024</code> (MCC-D-HS) to <code>RULE-GARBAGE-01</code>
-        — Historical Replay renders that boundary transition.
-      </p>
+        )}
+      </details>
     </section>
   );
 }

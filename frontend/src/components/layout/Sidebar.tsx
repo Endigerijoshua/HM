@@ -4,14 +4,9 @@ import { fetchHealth } from "../../api";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", end: true },
-  { to: "/route", label: "Citizen Routing" },
-  { to: "/history", label: "Historical Explorer" },
   { to: "/whatif", label: "What-If Simulator" },
-  { to: "/migrations", label: "Complaint Migration" },
   { to: "/conflicts", label: "Responsibility Conflicts" },
   { to: "/graph", label: "Responsibility Graph" },
-  { to: "/replay", label: "Historical Replay" },
-  { to: "/admin", label: "Admin Boundaries" },
 ];
 
 type BackendState =
