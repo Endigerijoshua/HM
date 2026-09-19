@@ -40,7 +40,8 @@ analysis provably read-only and deterministic.
 ## Status
 
 P0 foundations → P8 complete frontend integration are all shipped and tested,
-plus **P9 location + mobile**: browser geolocation, pick-on-map and manual
+plus **P9 location + mobile**: browser geolocation, an interactive
+Leaflet/OpenStreetMap map with click-to-select and manual
 coordinate entry on Citizen Routing, and a mobile-first layout with a sidebar
 drawer. The 8-page web app drives the real backend end to end (see
 [Roadmap](#roadmap) for the per-phase breakdown).
@@ -86,8 +87,10 @@ the DI boundary.
   file-backed demo store) · Pydantic v2 · Shapely (geometry predicates) ·
   Uvicorn.
 - **Frontend:** React 18 · TypeScript 5 · Vite 5 · react-router-dom 6 · plain
-  CSS custom properties (no UI framework) · SVG vector jurisdiction map (no
-  map SDK) · zero additional runtime dependencies beyond the four above.
+  CSS custom properties (no UI framework) · SVG vector jurisdiction maps on the
+  explorer/replay pages · Leaflet + OpenStreetMap interactive routing map on
+  Citizen Routing (no Google Maps, no API keys; OSM base tiles + locally drawn
+  jurisdiction overlays) · zero additional runtime dependencies beyond those.
 - **Tests:** pytest (backend, in-process TestClient + live HTTP smoke) ·
   `tsc --noEmit` + `vite build` (frontend).
 - **Ops:** Docker compose for a one-command demo stack (backend + nginx
@@ -122,14 +125,14 @@ temporal-civic-dt/
 │  │  ├─ schemas/        # pydantic request/response models (incl. schemas/gis.py, schemas/routing.py)
 │  │  ├─ seed/           # deterministic Mysuru-style demo data (incl. P2 issue types + routing rules)
 │  │  └─ logging_config.py
-│  ├─ tests/             # pytest suite (P0 + P1 GIS + P2 routing: 158 tests)
+│  ├─ tests/             # pytest suite (P0–P9: 168 tests)
 │  ├─ requirements.txt
 │  ├─ .env.example
 │  └─ Dockerfile
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ api/            # typed client (fetch), ApiError, health + GIS types/client
-│  │  ├─ components/     # app shell, sidebar, placeholder, SVG JurisdictionMap
+│  │  ├─ components/     # app shell, sidebar, placeholder, SVG JurisdictionMap, Leaflet CivicMap
 │  │  ├─ pages/          # dashboard + 7 module pages (Historical Explorer built)
 │  │  ├─ App.tsx         # routes
 │  │  └─ index.css
@@ -572,14 +575,17 @@ reading between sessions.
   secure context — `https://` for production / LAN, or `http://localhost` /
   `http://127.0.0.1` during development.
 
-### 2. Pick on Map
+### 2. Click the map
 
-Toggles a pick mode; tapping the map sets the routing point exactly. The
-routing map is now **interactive**: drag to pan, scroll / pinch to zoom, `+/−`
-button controls, a reset-view button, and keyboard panning for the map's focus
-(`Arrow` keys, `+`/`-`, `Enter` selects the center when picking — the map is
-focusable and announces its behavior). A drag vs. tap threshold keeps panning
-from accidentally selecting points.
+The routing map is a real interactive map (Leaflet + OpenStreetMap base
+tiles, no Google / no API key) with the civic dataset drawn on top: wards,
+heritage areas, corridors, roads and jurisdiction-area outlines. **Clicking or
+tapping any street or point selects it and routes immediately** (when an issue
+is chosen); Leaflet's native click-vs-drag behavior keeps panning/zooming from
+accidentally selecting points. `+/−` zoom controls, attribution, an always-on
+`CIVIC JURISDICTION` legend, and a graceful "tiles unavailable (offline?)"
+notice (superimposed when 5+ tiles fail) are included. A GPS point also shows
+its browser-reported accuracy ring.
 
 ### 3. Enter coordinates manually
 
@@ -640,10 +646,11 @@ device.
   polygon of *simulate* slightly differently from *migration-preview*; both
   views are internally consistent, and the mismatch never changes routing
   output shown to the user.
-- Maps are projected into a fixed local viewBox (SVG); they are resolution-
-  independent and resize-safe. Citizen Routing's map supports interactive
-  pan/zoom/pinch (plus keyboard panning); the read-only maps on the other pages
-  keep the original fit-to-viewBox view.
+- The routing map is a Leaflet + OpenStreetMap map: OSM base tiles require a
+  network connection (with an in-app "tiles unavailable (offline?)" notice that
+  keeps the locally-drawn jurisdiction overlays visible), and it uses the OSM
+  usage policy and tile servers (no Google Maps, no API key). The read-only
+  maps on the other pages stay SVG fit-to-viewBox.
 - Browser geolocation requires a secure context; on plain-HTTP (non-localhost)
   deployments the "Use My Current Location" button degrades to the "not
   supported" guidance and the map / manual entry remain available.
@@ -699,8 +706,9 @@ Nothing above needs to change when moving from the demo store to PostGIS:
   (Applying migrations to live isn't implemented — the migration page is a
   read-only preview by design.)
 - **P9** (done): citizen routing location + mobile — one-shot browser
-  geolocation ("Use My Current Location"), pick-on-map with interactive
-  pan/zoom/pinch on the routing map, manual coordinate fallback, a single
+  geolocation ("Use My Current Location"), an interactive Leaflet + OpenStreetMap
+  routing map with always-on click-to-select and a civic-jurisdiction overlay
+  (no Google, no API key), manual coordinate fallback, a single
   `selectedLocation` source of truth, `aria-live` status readouts, privacy-safe
   (no persistence / no tracking), and a mobile-first layout with an accessible
   sidebar drawer and responsive routing page.

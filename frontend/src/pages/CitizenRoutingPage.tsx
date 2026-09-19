@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ApiError, fetchAreas, fetchJurisdictions, fetchRoads } from "../api";
+import { ApiError, fetchAreas, fetchJurisdictions, fetchRoads, lookupJurisdiction } from "../api";
 import type { AreaSummary, JurisdictionSummary, RoadSummary } from "../api/gisTypes";
 import { resolveGraph } from "../api/graph";
 import type { GraphResolveResponse } from "../api/graphTypes";
@@ -12,10 +12,9 @@ import type {
   RoutingStatus,
 } from "../api/routingTypes";
 import { ResponsibilityGraph } from "../components/graph/ResponsibilityGraph";
-import { JurisdictionMap } from "../components/map/JurisdictionMap";
+import { CivicMap } from "../components/map/CivicMap";
 import { RoutingExplanation } from "../components/routing/RoutingExplanation";
 import { DemoFlowBar } from "../components/DemoFlowBar";
-import { MapLegend } from "../components/map/MapLegend";
 import { useGeolocation } from "../hooks/useGeolocation";
 import {
   isGeolocationSupported,
@@ -90,11 +89,11 @@ export default function CitizenRoutingPage() {
   const [graphError, setGraphError] = useState<string | null>(null);
 
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
-  const [picking, setPicking] = useState(false);
   const [focusLocation, setFocusLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [manualLat, setManualLat] = useState("");
   const [manualLng, setManualLng] = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
+  const [gpsOutside, setGpsOutside] = useState(false);
   const geo = useGeolocation();
 
   useEffect(() => {
@@ -222,20 +221,28 @@ export default function CitizenRoutingPage() {
 
   useEffect(() => {
     if (geo.status !== "success" || geo.latitude == null || geo.longitude == null) return;
-    setSelectedLocation({
-      latitude: geo.latitude,
-      longitude: geo.longitude,
-      accuracy: geo.accuracy,
-      source: "gps",
-    });
-    setFocusLocation({ lat: geo.latitude, lng: geo.longitude });
-    setPicking(false);
-  }, [geo.status, geo.latitude, geo.longitude, geo.accuracy]);
+    const { latitude, longitude, accuracy } = geo;
+    setSelectedLocation({ latitude, longitude, accuracy, source: "gps" });
+    setFocusLocation({ lat: latitude, lng: longitude });
+    setGpsOutside(false);
+    let cancelled = false;
+    lookupJurisdiction({ lat: latitude, lng: longitude, on_date: onDate })
+      .then((lookup) => {
+        if (cancelled) return;
+        setGpsOutside(lookup.status !== "MATCHED");
+      })
+      .catch(() => {
+        if (!cancelled) setGpsOutside(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [geo.status, geo.latitude, geo.longitude, geo.accuracy, onDate]);
 
   const handleSelect = useCallback(
     (lat: number, lng: number) => {
       setSelectedLocation({ latitude: lat, longitude: lng, accuracy: null, source: "map" });
-      setPicking(false);
+      setGpsOutside(false);
       geo.reset();
       if (issueType) runResolve(lat, lng, issueType, onDate);
     },
@@ -256,7 +263,7 @@ export default function CitizenRoutingPage() {
     setManualError(null);
     setSelectedLocation({ latitude: lat, longitude: lng, accuracy: null, source: "manual" });
     setFocusLocation({ lat, lng });
-    setPicking(false);
+    setGpsOutside(false);
     geo.reset();
   };
 
@@ -275,6 +282,8 @@ export default function CitizenRoutingPage() {
     const date = searchParams.get("date");
     if (date) setOnDate(date);
     setSelectedLocation({ latitude: lat, longitude: lng, accuracy: null, source: "map" });
+    setFocusLocation({ lat, lng });
+    setGpsOutside(false);
     runResolve(lat, lng, issue, date ?? onDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode]);
@@ -282,7 +291,8 @@ export default function CitizenRoutingPage() {
   const handleScenario = (issue: string, point: { lat: number; lng: number }) => {
     setIssueType(issue);
     setSelectedLocation({ latitude: point.lat, longitude: point.lng, accuracy: null, source: "map" });
-    setPicking(false);
+    setFocusLocation({ lat: point.lat, lng: point.lng });
+    setGpsOutside(false);
     runResolve(point.lat, point.lng, issue, onDate);
   };
 
@@ -372,25 +382,10 @@ export default function CitizenRoutingPage() {
           >
             {geo.status === "requesting" ? "Getting your location…" : "Use My Current Location"}
           </button>
-          <button
-            type="button"
-            className={`btn btn-outline btn-lg routing-map-btn${picking ? " is-active" : ""}`}
-            onClick={() => {
-              const next = !picking;
-              setPicking(next);
-              if (next) geo.reset();
-            }}
-            aria-pressed={picking}
-            aria-label="Pick on map"
-          >
-            {picking ? "Cancel picking" : "Pick on Map"}
-          </button>
         </div>
 
         <div className="location-panel" aria-live="polite">
-          {geo.status === "requesting" && (
-            <p className="location-status">Getting your location…</p>
-          )}
+          {geo.status === "requesting" && <p className="location-status">Getting your location…</p>}
           {geo.error && geo.status !== "requesting" && geo.status !== "success" && (
             <div className="location-error">
               <p>{geo.error}</p>
@@ -410,15 +405,26 @@ export default function CitizenRoutingPage() {
               {selectedLocation.accuracy != null
                 ? ` · accuracy ±${Math.round(selectedLocation.accuracy)} m`
                 : ""}
-              {picking ? " — tap the map to set it." : ""}
+            </p>
+          )}
+          {gpsOutside && selectedLocation?.source === "gps" && (
+            <p className="location-outside">
+              Your current location is outside the supported Mysuru civic dataset. The point is
+              still valid — routing will report that no supported jurisdiction covers it.
             </p>
           )}
           {!selectedLocation && geo.status !== "requesting" && !geo.error && (
             <p className="muted">
-              Choose a location: use your current location, tap &ldquo;Pick on Map&rdquo;, or enter
-              coordinates below.
+              Select a location on the Mysuru map, use your current location, or enter coordinates
+              below.
             </p>
           )}
+        </div>
+
+        <div className="routing-map-hint">
+          <strong>Select a location on the Mysuru map:</strong> click or tap a street, or use your
+          current location. Beware coordinates you read elsewhere must be within the supported
+          Mysuru civic dataset.
         </div>
 
         <details className="manual-coords">
@@ -468,7 +474,6 @@ export default function CitizenRoutingPage() {
             disabled={!selectedLocation || !issueType || resolving}
             onClick={() => {
               if (!selectedLocation) return;
-              setPicking(false);
               runResolve(selectedLocation.latitude, selectedLocation.longitude, issueType, onDate);
             }}
           >
@@ -486,26 +491,21 @@ export default function CitizenRoutingPage() {
 
       <div className="gis-layout">
         <div className="card gis-map-card">
-          <JurisdictionMap
+          <CivicMap
             jurisdictions={jurisdictions}
             areas={areas}
             roads={roads}
             probe={probe}
             highlightCode={highlightCode}
             activeVersionLabels={activeVersions}
-            onSelect={handleSelect}
-            interactive
-            picking={picking}
             selectedLocation={selectedLocation}
             focusLocation={focusLocation}
+            onSelect={handleSelect}
           />
-          <MapLegend />
           <p className="muted gis-click-hint">
-            {picking
-              ? "Tap anywhere on the map to set your location."
-              : issueType
-                ? `Click anywhere on the map to route "${issueType}" on ${onDate}.`
-                : "Pick an issue type first, then set a location."}
+            {issueType
+              ? `Click any street or location on the map to route "${issueType}" on ${onDate}.`
+              : "Select an issue type first, then click a location on the map."}
           </p>
         </div>
 
@@ -627,11 +627,18 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
         <span className={`result-status ${STATUS_TONE[result.status]}`}>{result.status}</span>
       </div>
 
+      {result.status === "NO_JURISDICTION" && (
+        <div className="no-jurisdiction-note" role="status">
+          No supported civic jurisdiction covers this location on the selected date. Try a point
+          inside a Mysuru ward on the map above.
+        </div>
+      )}
+
       <dl className="kv">
         <div>
           <dt>Point</dt>
           <dd>
-            {result.longitude.toFixed(5)}, {result.latitude.toFixed(5)}
+            {result.latitude.toFixed(5)}, {result.longitude.toFixed(5)}
           </dd>
         </div>
         <div>
