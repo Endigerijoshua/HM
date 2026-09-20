@@ -18,7 +18,8 @@ services:
         value: sqlite:///./civic_demo.db
       - key: TCIVIC_SEED_ON_STARTUP
         value: "true"
-      # Comma-separated list of allowed CORS origins (e.g. the Vercel domain:
-      # https://your-app.vercel.app). Add/update it once the URL is known.
+      # Comma-separated list of allowed CORS origins (no trailing slash per
+      # origin; browsers send the Origin header without one). The Vercel
+      # frontend plus the local dev servers.
       - key: TCIVIC_CORS_ORIGINS
-        value: https://localhost
+        value: https://hm-gamma-kohl.vercel.app,http://localhost:5173,http://localhost:8080
