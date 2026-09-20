@@ -13,7 +13,7 @@ export function ViewToggle() {
   const switchTo = (key: ViewMode) => {
     if (key === view) return;
     setView(key);
-    navigate(key === "citizen" ? "/route" : "/");
+    navigate(key === "citizen" ? "/route" : "/admin");
   };
 
   return (

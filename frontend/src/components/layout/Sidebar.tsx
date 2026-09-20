@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 import { fetchHealth } from "../../api";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", end: true },
+  { to: "/admin", label: "Dashboard", end: true },
   { to: "/whatif", label: "What-If Simulator" },
   { to: "/conflicts", label: "Responsibility Conflicts" },
   { to: "/graph", label: "Responsibility Graph" },

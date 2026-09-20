@@ -35,6 +35,17 @@ export function fill(
 export interface Dict {
   brandTitle: string;
   brandSub: string;
+
+  // Landing page
+  landingTagline: string;
+  landingIntro: string;
+  landingHowTitle: string;
+  landingStepDescribeBody: string;
+  landingStepPinBody: string;
+  landingStepResponsibleBody: string;
+  ctaReport: string;
+  ctaExploreAdmin: string;
+
   pageTitle: string;
   pageSubtitle: string;
   loadingData: string;
@@ -132,6 +143,16 @@ export interface Dict {
 const en: Dict = {
   brandTitle: "JanSetu",
   brandSub: "Temporal Civic Jurisdiction Digital Twin (TCJDT)",
+
+  landingTagline: "Your complaint, routed to the right office.",
+  landingIntro:
+    "Report what's wrong, and JanSetu finds the office responsible — even when ward boundaries change.",
+  landingHowTitle: "How it works",
+  landingStepDescribeBody: "What's wrong",
+  landingStepPinBody: "Where it is",
+  landingStepResponsibleBody: "Who must act",
+  ctaReport: "Report an issue",
+  ctaExploreAdmin: "Explore admin tools",
 
   pageTitle: "Citizen Routing",
   pageSubtitle:
@@ -330,6 +351,16 @@ const en: Dict = {
 const kn: Dict = {
   brandTitle: "ಜನಸೇತು",
   brandSub: "ತಾತ್ಕಾಲಿಕ ನಾಗರಿಕ ವ್ಯಾಪ್ತಿ ಡಿಜಿಟಲ್ ಟ್ವಿನ್ (TCJDT)",
+
+  landingTagline: "ನಿಮ್ಮ ದೂರು, ಸರಿಯಾದ ಕಚೇರಿಗೆ.",
+  landingIntro:
+    "ಸಮಸ್ಯೆ ಏನೆಂದು ವರದಿ ಮಾಡಿ, ಜನಸೇತು ಜವಾಬ್ದಾರಿಯ ಕಚೇರಿಯನ್ನು ಪತ್ತೆ ಮಾಡುತ್ತದೆ — ವಾರ್ಡ್ ಗಡಿಗಳು ಬದಲಾದರೂ ಸಹ.",
+  landingHowTitle: "ಇದು ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ",
+  landingStepDescribeBody: "ಸಮಸ್ಯೆ ಏನು",
+  landingStepPinBody: "ಎಲ್ಲಿದೆ",
+  landingStepResponsibleBody: "ಯಾರು ಕಾರ್ಯನಿರ್ವಹಿಸಬೇಕು",
+  ctaReport: "ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ",
+  ctaExploreAdmin: "ನಿರ್ವಾಹಕ ಪರಿಕರಗಳನ್ನು ಅನ್ವೇಷಿಸಿ",
 
   pageTitle: "ನಾಗರಿಕ ಸೇವಾ ಮಾರ್ಗದರ್ಶನ",
   pageSubtitle:

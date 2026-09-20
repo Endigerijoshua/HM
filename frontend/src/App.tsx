@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ViewProvider, useViewMode } from "./components/layout/ViewContext";
 import { ViewToggle } from "./components/layout/ViewToggle";
@@ -11,6 +11,7 @@ import ComplaintMigrationPage from "./pages/ComplaintMigrationPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistoricalExplorerPage from "./pages/HistoricalExplorerPage";
 import HistoricalReplayPage from "./pages/HistoricalReplayPage";
+import LandingPage from "./pages/LandingPage";
 import ResponsibilityConflictsPage from "./pages/ResponsibilityConflictsPage";
 import ResponsibilityGraphPage from "./pages/ResponsibilityGraphPage";
 import WhatIfSimulatorPage from "./pages/WhatIfSimulatorPage";
@@ -18,6 +19,11 @@ import WhatIfSimulatorPage from "./pages/WhatIfSimulatorPage";
 function AppRoutes() {
   const { view } = useViewMode();
   const { lang } = useCitizenLanguage();
+  const { pathname } = useLocation();
+
+  if (pathname === "/") {
+    return <LandingPage />;
+  }
 
   if (view === "citizen") {
     const dict = strings[lang];
@@ -46,7 +52,9 @@ function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<DashboardPage />} />
+        <Route index element={<Navigate to="/admin" replace />} />
+        <Route path="admin" element={<DashboardPage />} />
+        <Route path="admin/boundaries" element={<AdminBoundaryPage />} />
         <Route path="route" element={<CitizenRoutingPage />} />
         <Route path="history" element={<HistoricalExplorerPage />} />
         <Route path="replay" element={<HistoricalReplayPage />} />
@@ -54,7 +62,6 @@ function AppRoutes() {
         <Route path="migrations" element={<ComplaintMigrationPage />} />
         <Route path="conflicts" element={<ResponsibilityConflictsPage />} />
         <Route path="graph" element={<ResponsibilityGraphPage />} />
-        <Route path="admin" element={<AdminBoundaryPage />} />
         <Route path="*" element={<MissingPage />} />
       </Route>
     </Routes>

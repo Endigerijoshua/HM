@@ -13,7 +13,7 @@ const MODULES = [
   { name: "P5 · Responsibility Conflicts", to: "/conflicts", phase: "P5", status: "IMPLEMENTED" },
   { name: "P6 · Responsibility Graph", to: "/graph", phase: "P6", status: "IMPLEMENTED" },
   { name: "P7 · Historical Replay", to: "/replay", phase: "P7", status: "IMPLEMENTED" },
-  { name: "P8 · Admin Boundaries (read-only)", to: "/admin", phase: "P8", status: "IMPLEMENTED" },
+  { name: "P8 · Admin Boundaries (read-only)", to: "/admin/boundaries", phase: "P8", status: "IMPLEMENTED" },
 ];
 
 const WORKFLOW_ROUTING = [
