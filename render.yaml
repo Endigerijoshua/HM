@@ -1,0 +1,24 @@
+# Render blueprint ─ single web service hosting the FastAPI backend.
+#
+# The frontend is deployed separately on Vercel (static build pushed from
+# `frontend/dist`); point its `VITE_API_BASE_URL` at the backend's public URL.
+# The backend self-seeds SQLite on every boot (see app/main.py lifespan), so no
+# manual seed step is needed even though Render uses an ephemeral filesystem.
+services:
+  - type: web
+    name: temporal-civic-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health/live
+    envVars:
+      - key: TCIVIC_DATABASE_URL
+        value: sqlite:///./civic_demo.db
+      - key: TCIVIC_SEED_ON_STARTUP
+        value: "true"
+      # Comma-separated list of allowed CORS origins (e.g. the Vercel domain:
+      # https://your-app.vercel.app). Add/update it once the URL is known.
+      - key: TCIVIC_CORS_ORIGINS
+        value: https://localhost

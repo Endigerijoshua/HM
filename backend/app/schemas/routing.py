@@ -43,6 +43,18 @@ class ActorRef(BaseModel):
     name: str
 
 
+class ScoreRef(BaseModel):
+    """A deterministic, rule-based civic score (trust or priority).
+
+    Purely informational: scotes are shown as badges but never alter or gate
+    the routing result itself.
+    """
+
+    level: str  # "low" | "medium" | "high"
+    points: int
+    reason: str
+
+
 class EscalationStepRef(BaseModel):
     step_number: int
     authority: ActorRef
@@ -82,6 +94,12 @@ class RoutingResult(BaseModel):
     explanation: str | None = None
     reason: str | None = None
     audit_id: int | None = None
+
+    # Additive, purely informational civic scores (P2 add-on).
+    # Derived from the seeded complaint rows near the request point; purely a
+    # citizen-facing badge that never gates or alters the routing decision.
+    trust_score: ScoreRef | None = None
+    priority_score: ScoreRef | None = None
 
 
 class IssueTypeSummary(BaseModel):

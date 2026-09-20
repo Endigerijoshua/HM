@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
-import type { RoutingResult } from "../../api/routingTypes";
+import type { RoutingResult, RoutingStatus } from "../../api/routingTypes";
+import { fill, type Dict } from "../../lib/i18n/citizenStrings";
 
 interface RoutingExplanationProps {
   result: RoutingResult;
+  dict: Dict;
 }
 
 interface ExplainStep {
@@ -10,6 +12,22 @@ interface ExplainStep {
   label: string;
   body: ReactNode;
 }
+
+interface Check {
+  label: string;
+  detail: string;
+  ok: boolean;
+}
+
+const STATUS_TONE: Record<RoutingStatus, string> = {
+  RESOLVED: "ok-tag",
+  RESPONSIBILITY_UNRESOLVED: "bad-tag",
+  NO_JURISDICTION: "muted-tag",
+  TEMPORAL_CONFLICT: "warn-tag",
+  INVALID_LOCATION: "bad-tag",
+  INVALID_ISSUE: "bad-tag",
+  INVALID_DATE: "bad-tag",
+};
 
 function ExplainStepRow({ icon, label, body }: ExplainStep) {
   return (
@@ -25,55 +43,49 @@ function ExplainStepRow({ icon, label, body }: ExplainStep) {
   );
 }
 
-interface Check {
-  label: string;
-  detail: string;
-  ok: boolean;
-}
-
 /**
  * "Why was this routed here?" panel. Pure presentation over the existing
  * routing response — nothing is recomputed or invented. Shows the full
  * explainable chain for RESOLVED results and an explicit warning that names
  * the step where resolution stopped otherwise.
  */
-export function RoutingExplanation({ result }: RoutingExplanationProps) {
+export function RoutingExplanation({ result, dict }: RoutingExplanationProps) {
   if (result.status !== "RESOLVED") {
-    const stoppedAt =
+    const stopKey: "jurisdiction" | "rule" | "issue" | "date" | "resolution" =
       result.status === "NO_JURISDICTION" || result.status === "INVALID_LOCATION"
-        ? "Temporal Jurisdiction"
+        ? "jurisdiction"
         : result.status === "TEMPORAL_CONFLICT" || result.status === "RESPONSIBILITY_UNRESOLVED"
-          ? "Routing Rule"
+          ? "rule"
           : result.status === "INVALID_ISSUE"
-            ? "Issue"
+            ? "issue"
             : result.status === "INVALID_DATE"
-              ? "Date"
-              : "Resolution";
-    const stoppedReason =
+              ? "date"
+              : "resolution";
+    const stopReasonKey: "tie" | "noJurisdiction" | "unknownIssue" | "invalidDate" | "fallback" =
       result.status === "RESPONSIBILITY_UNRESOLVED" || result.status === "TEMPORAL_CONFLICT"
-        ? "Two or more equal-priority rules matched and disagree on ownership."
+        ? "tie"
         : result.status === "NO_JURISDICTION" || result.status === "INVALID_LOCATION"
-          ? "No jurisdiction covers this point on the requested date."
+          ? "noJurisdiction"
           : result.status === "INVALID_ISSUE"
-            ? "The issue type is not registered in the decision table."
+            ? "unknownIssue"
             : result.status === "INVALID_DATE"
-              ? "The requested date is outside the supported routing window."
-              : "The request could not be resolved.";
+              ? "invalidDate"
+              : "fallback";
 
     return (
-      <section className="explain-panel explain-panel-warn" aria-label="Why this route was not resolved">
+      <section className="explain-panel explain-panel-warn" aria-label={dict.explainAriaNotResolved}>
         <header className="explain-head">
-          <h3>Why was this routed here?</h3>
+          <h3>{dict.explainTitle}</h3>
           <span className={`result-status ${STATUS_TONE[result.status]}`}>{result.status}</span>
         </header>
         <div className="explain-warn">
           <p className="explain-warn-step">
-            Resolution stopped at <strong>{stoppedAt}</strong>.
+            {fill(dict.explainStoppedAt, { step: dict.explainStoppedAtNames[stopKey] })}
           </p>
-          <p>{stoppedReason}</p>
+          <p>{dict.explainStoppedReasons[stopReasonKey]}</p>
           {result.conflict_rule_codes.length > 0 && (
             <>
-              <p className="muted">Conflicting rules matched:</p>
+              <p className="muted">{dict.conflictingRules}</p>
               <ul className="conflict-list">
                 {result.conflict_rule_codes.map((code) => (
                   <li key={code}>
@@ -90,12 +102,12 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
           <footer className="explain-audit">
             {result.audit_id !== null ? (
               <span>
-                Decision / audit ID: <code>routing.resolve #{result.audit_id}</code>
+                {dict.auditId} <code>routing.resolve #{result.audit_id}</code>
               </span>
             ) : null}
             {result.routing_rule_id !== null ? (
               <span>
-                Decision-table rule id: <code>#{result.routing_rule_id}</code>
+                {dict.ruleId} <code>#{result.routing_rule_id}</code>
               </span>
             ) : null}
           </footer>
@@ -129,33 +141,33 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
     : "—";
 
   const checks: Check[] = [
-    { label: "Valid coordinates", detail: `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`, ok: true },
-    { label: "Jurisdiction found for requested date", detail: result.version_code ?? "CURRENT", ok: Boolean(result.jurisdiction_code) },
-    { label: "Issue type matched", detail: result.issue_type, ok: Boolean(result.routing_rule_code) },
-    { label: "Responsibility rule matched", detail: result.routing_rule_code ?? "—", ok: Boolean(result.routing_rule_code) },
-    { label: "Service resolved", detail: result.service?.code ?? "—", ok: Boolean(result.service) },
+    { label: dict.checkLabels.coordinates, detail: `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`, ok: true },
+    { label: dict.checkLabels.jurisdiction, detail: result.version_code ?? "CURRENT", ok: Boolean(result.jurisdiction_code) },
+    { label: dict.checkLabels.issue, detail: result.issue_type, ok: Boolean(result.routing_rule_code) },
+    { label: dict.checkLabels.rule, detail: result.routing_rule_code ?? "—", ok: Boolean(result.routing_rule_code) },
+    { label: dict.checkLabels.service, detail: result.service?.code ?? "—", ok: Boolean(result.service) },
   ];
 
   const steps: ExplainStep[] = [
     {
       icon: "📍",
-      label: "Location",
+      label: dict.stepNames.location,
       body: (
         <>
-          Coordinates: <code>{coords}</code>
+          {dict.coordsLabel} <code>{coords}</code>
           <span className="explain-node-detail"> · {result.issue_type} · {result.effective_date}</span>
         </>
       ),
     },
     {
       icon: "🗺",
-      label: "Temporal Jurisdiction",
+      label: dict.stepNames.temporalJurisdiction,
       body: (
         <>
           {jurisdictionValue}
           <span className="explain-node-detail">
             {" "}
-            · Version: {result.version_code ?? "(none)"}
+            · {fill(dict.versionLabel, { version: result.version_code ?? "(none)" })}
             {result.version_status ? ` (${result.version_status})` : ""}
           </span>
         </>
@@ -163,17 +175,17 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
     },
     {
       icon: "🗂",
-      label: "Ward / Area",
+      label: dict.stepNames.wardArea,
       body: (
         <>
           {wardValue}
-          {result.matched_scope ? <span className="explain-node-detail"> · matched scope: {result.matched_scope}</span> : null}
+          {result.matched_scope ? <span className="explain-node-detail"> · {fill(dict.matchedScopeLabel, { scope: result.matched_scope })}</span> : null}
         </>
       ),
     },
     {
       icon: "🏛",
-      label: "Responsible Authority",
+      label: dict.stepNames.authority,
       body: (
         <>
           <strong>{result.authority?.code ?? "(none)"}</strong>
@@ -183,7 +195,7 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
     },
     {
       icon: "🏢",
-      label: "Department",
+      label: dict.stepNames.department,
       body: (
         <>
           <strong>{result.department?.code ?? "(none)"}</strong>
@@ -193,35 +205,35 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
     },
     {
       icon: "🛠",
-      label: "Service",
+      label: dict.stepNames.service,
       body: (
         <>
           <strong>{result.service?.code ?? "(none)"}</strong>
           {result.service?.name ? <span className="explain-node-detail"> · {result.service.name}</span> : null}
-          {result.sla_days !== null ? <span className="explain-node-detail"> · SLA {result.sla_days} days</span> : null}
+          {result.sla_days !== null ? <span className="explain-node-detail"> · {fill(dict.slaDays, { days: result.sla_days })}</span> : null}
         </>
       ),
     },
     {
       icon: "📋",
-      label: "Routing Rule",
+      label: dict.stepNames.routingRule,
       body: (
         <>
           <code>{result.routing_rule_code ?? "(none)"}</code>
-          <span className="explain-node-detail"> · rule id #{result.routing_rule_id ?? "—"}</span>
+          <span className="explain-node-detail"> · {fill(dict.ruleIdNum, { id: result.routing_rule_id ?? "—" })}</span>
         </>
       ),
     },
     {
       icon: "🚨",
-      label: "Escalation Path",
+      label: dict.stepNames.escalationPath,
       body: (
         <>
           {escalationValue}
           {result.escalation_path.length > 0 && (
             <span className="explain-node-detail">
               {" "}
-              · steps: {result.escalation_path.map((step) => `#${step.step_number} ${step.authority.code}${step.note ? ` (${step.note})` : ""}`).join(", ")}
+              · {fill(dict.escalationSteps, { steps: result.escalation_path.map((step) => `#${step.step_number} ${step.authority.code}${step.note ? ` (${step.note})` : ""}`).join(", ") })}
             </span>
           )}
         </>
@@ -230,13 +242,13 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
   ];
 
   return (
-    <section className="explain-panel" aria-label="Why this route was chosen">
+    <section className="explain-panel" aria-label={dict.explainAriaChosen}>
       <header className="explain-head">
-        <h3>Why was this routed here?</h3>
+        <h3>{dict.explainTitle}</h3>
         <span className={`result-status ${STATUS_TONE[result.status]}`}>{result.status}</span>
       </header>
 
-      <div className="explain-checks" aria-label="Decision basis">
+      <div className="explain-checks" aria-label={dict.explainDecisionBasis}>
         {checks.map((check) => (
           <span key={check.label} className={`check-item ${check.ok ? "check-ok" : "check-no"}`}>
             <span aria-hidden="true">{check.ok ? "✓" : "✗"}</span>
@@ -261,23 +273,12 @@ export function RoutingExplanation({ result }: RoutingExplanationProps) {
 
       <footer className="explain-audit">
         <span>
-          Decision / audit ID: <code>{result.audit_id !== null ? `routing.resolve #${result.audit_id}` : "—"}</code>
+          {dict.auditId} <code>{result.audit_id !== null ? `routing.resolve #${result.audit_id}` : "—"}</code>
         </span>
         <span className="explain-map-link">
-          Map: probe marker and <strong>{result.jurisdiction_code ?? "jurisdiction"}</strong> boundary highlight use
-          exactly these coordinates.
+          {fill(dict.mapFooter, { jurisdiction: result.jurisdiction_code ?? "jurisdiction" })}
         </span>
       </footer>
     </section>
   );
 }
-
-const STATUS_TONE: Record<string, string> = {
-  RESOLVED: "ok-tag",
-  RESPONSIBILITY_UNRESOLVED: "bad-tag",
-  NO_JURISDICTION: "muted-tag",
-  TEMPORAL_CONFLICT: "warn-tag",
-  INVALID_LOCATION: "bad-tag",
-  INVALID_ISSUE: "bad-tag",
-  INVALID_DATE: "bad-tag",
-};

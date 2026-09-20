@@ -21,6 +21,13 @@ from app.api.deps import get_db, get_routing_service
 from app.db.models.issue_types import IssueType
 from app.db.models.routing import RoutingRule
 from app.routing.routing_service import ResponsibilityRoutingService
+from app.scoring import (
+    ComplaintFacts,
+    RECENT_WINDOW,
+    Score,
+    calculate_priority,
+    calculate_trust_score,
+)
 from app.schemas.routing import (
     IssueTypeListResponse,
     IssueTypeSummary,
@@ -28,7 +35,9 @@ from app.schemas.routing import (
     RoutingResult,
     RoutingRuleListResponse,
     RoutingRuleSummary,
+    ScoreRef,
 )
+from app.db.models.complaints import Complaint
 
 router = APIRouter(prefix="/routing", tags=["routing"])
 
@@ -108,7 +117,63 @@ def resolve_route(
         on_date=request.on_date,
     )
     db.commit()
-    return result
+
+    # Additive, purely informational trust/priority badges (P2 add-on).
+    # Computed from seeded complaint rows; never gates or alters the result.
+    trust, priority = _score_request_facts(request, db)
+    return result.model_copy(update={"trust_score": trust, "priority_score": priority})
+
+
+def _score_request_facts(
+    request: RouteResolveRequest, db: Session
+) -> tuple[ScoreRef, ScoreRef]:
+    """Deterministic, purely informational trust/priority badges for a request.
+
+    Builds a :class:`~app.scoring.ComplaintFacts` view of the pending request
+    (no description, generic source, "now") and runs the seeded complaint
+    scoring heuristics against recent complaint rows near the request point.
+    The resulting scores are additive and never gate or alter ``resolve``.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models.complaints import Complaint
+    from app.schemas.routing import ScoreRef
+    from app.scoring import (
+        ComplaintFacts,
+        Score,
+        calculate_priority,
+        calculate_trust_score,
+    )
+
+    now = datetime.now(timezone.utc)
+    recent_from = now - timedelta(minutes=10)
+
+    request_facts = ComplaintFacts(
+        latitude=request.latitude,
+        longitude=request.longitude,
+        issue_type=request.issue_type,
+        description="",
+        source="web",
+        created_at=now,
+        public_ref=None,
+    )
+
+    rows = (
+        db.query(Complaint)
+        .filter(Complaint.created_at >= recent_from)
+        .order_by(Complaint.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    recent = [ComplaintFacts.from_orm(row) for row in rows]
+
+    trust = calculate_trust_score(request_facts, recent)
+    priority = calculate_priority(request_facts, recent)
+
+    def _to_ref(score: Score) -> ScoreRef:
+        return ScoreRef(level=score.level, points=score.points, reason=score.reason)
+
+    return _to_ref(trust), _to_ref(priority)
 
 
 def _rule_summary(rule: RoutingRule, *, on_date: date | None) -> RoutingRuleSummary:

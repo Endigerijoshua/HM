@@ -2,6 +2,9 @@ import { Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ViewProvider, useViewMode } from "./components/layout/ViewContext";
 import { ViewToggle } from "./components/layout/ViewToggle";
+import { LanguageToggle } from "./components/layout/LanguageToggle";
+import { CitizenLanguageProvider, useCitizenLanguage } from "./lib/i18n/CitizenLanguage";
+import { strings } from "./lib/i18n/citizenStrings";
 import AdminBoundaryPage from "./pages/AdminBoundaryPage";
 import CitizenRoutingPage from "./pages/CitizenRoutingPage";
 import ComplaintMigrationPage from "./pages/ComplaintMigrationPage";
@@ -14,8 +17,10 @@ import WhatIfSimulatorPage from "./pages/WhatIfSimulatorPage";
 
 function AppRoutes() {
   const { view } = useViewMode();
+  const { lang } = useCitizenLanguage();
 
   if (view === "citizen") {
+    const dict = strings[lang];
     return (
       <div className="app-shell app-view-citizen">
         <header className="citizen-bar">
@@ -23,10 +28,13 @@ function AppRoutes() {
             <div className="brand-mark" />
             <div>
               <div className="brand-title">TCDT</div>
-              <div className="brand-sub">Civic Jurisdiction Digital Twin</div>
+              <div className="brand-sub">{dict.brandSub}</div>
             </div>
           </div>
-          <ViewToggle />
+          <div className="citizen-bar-actions">
+            <LanguageToggle />
+            <ViewToggle />
+          </div>
         </header>
         <main className="citizen-content">
           <CitizenRoutingPage />
@@ -56,7 +64,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <ViewProvider>
-      <AppRoutes />
+      <CitizenLanguageProvider>
+        <AppRoutes />
+      </CitizenLanguageProvider>
     </ViewProvider>
   );
 }

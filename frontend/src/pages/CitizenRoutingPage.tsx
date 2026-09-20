@@ -16,6 +16,8 @@ import { CivicMap } from "../components/map/CivicMap";
 import { RoutingExplanation } from "../components/routing/RoutingExplanation";
 import { DemoFlowBar } from "../components/DemoFlowBar";
 import { useViewMode } from "../components/layout/ViewContext";
+import { useCitizenLanguage } from "../lib/i18n/CitizenLanguage";
+import { fill, strings, type Dict } from "../lib/i18n/citizenStrings";
 import { useGeolocation } from "../hooks/useGeolocation";
 import {
   isGeolocationSupported,
@@ -73,6 +75,9 @@ const STATUS_TONE: Record<RoutingStatus, string> = {
 
 export default function CitizenRoutingPage() {
   const { view } = useViewMode();
+  const { lang } = useCitizenLanguage();
+  const dict = strings[view === "admin" ? "en" : lang];
+
   const [onDate, setOnDate] = useState(DEFAULT_DATE);
   const [issueType, setIssueType] = useState("");
   const [issueTypes, setIssueTypes] = useState<IssueTypeSummary[]>([]);
@@ -255,11 +260,11 @@ export default function CitizenRoutingPage() {
     const lat = Number(manualLat);
     const lng = Number(manualLng);
     if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-      setManualError("Latitude must be a number between -90 and 90.");
+      setManualError(dict.latError);
       return;
     }
     if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
-      setManualError("Longitude must be a number between -180 and 180.");
+      setManualError(dict.lngError);
       return;
     }
     setManualError(null);
@@ -304,36 +309,36 @@ export default function CitizenRoutingPage() {
   return (
     <section className="page citizen-page">
       <header className="page-header citizen-header">
-        <h1>Citizen Routing</h1>
-        <p>Tell us what the issue is, where it is, and when — we'll tell you who must act.</p>
+        <h1>{dict.pageTitle}</h1>
+        <p>{dict.pageSubtitle}</p>
       </header>
 
       {view === "admin" && demoMode && <DemoFlowBar active="route" />}
 
       {state.kind === "error" && <p className="error-text">{state.message}</p>}
-      {state.kind === "loading" && <p className="muted">Loading Mysuru map data…</p>}
+      {state.kind === "loading" && <p className="muted">{dict.loadingData}</p>}
 
       <section className="route-step">
         <div className="route-step-head">
           <span className="route-step-no">1</span>
-          <h2>Describe the issue</h2>
+          <h2>{dict.stepDescribe}</h2>
         </div>
         <div className="route-inputs">
           <div className="route-field">
-            <label htmlFor="issue-type">Issue type</label>
+            <label htmlFor="issue-type">{dict.issueTypeLabel}</label>
             <select
               id="issue-type"
               value={issueType}
               onChange={(event) => setIssueType(event.target.value)}
             >
-              <option value="">Select an issue…</option>
+              <option value="">{dict.issuePlaceholder}</option>
               {categories.map((category) => (
-                <optgroup key={category} label={category}>
+                <optgroup key={category} label={dict.categoryNames[category] ?? category}>
                   {issueTypes
                     .filter((t) => t.category === category)
                     .map((t) => (
                       <option key={t.code} value={t.code}>
-                        {t.name} · {t.code}
+                        {dict.issueTypeNames[t.code] ?? t.name} · {t.code}
                       </option>
                     ))}
                 </optgroup>
@@ -341,7 +346,7 @@ export default function CitizenRoutingPage() {
             </select>
           </div>
           <div className="route-field">
-            <label htmlFor="on-date">On this date</label>
+            <label htmlFor="on-date">{dict.onDateLabel}</label>
             <input
               id="on-date"
               type="date"
@@ -353,23 +358,25 @@ export default function CitizenRoutingPage() {
           </div>
         </div>
         {state.kind === "ok" && (
-          <p className="muted route-count">{jurisdictions.length} jurisdictions in force on {onDate}</p>
+          <p className="muted route-count">
+            {fill(dict.jurisdictionCount, { count: jurisdictions.length, date: onDate })}
+          </p>
         )}
         <details className="route-presets">
-          <summary>Example presets</summary>
+          <summary>{dict.presetsSummary}</summary>
           <div className="route-presets-grid">
             <div className="route-presets-col">
-              <span className="route-presets-label">Dates</span>
+              <span className="route-presets-label">{dict.presetsDatesLabel}</span>
               <div className="gis-quick">
                 {QUICK_DATES.map((q) => (
                   <button key={q.date} className="chip" onClick={() => setOnDate(q.date)}>
-                    {q.label}
+                    {dict.quickDates[q.date] ?? q.label}
                   </button>
                 ))}
               </div>
             </div>
             <div className="route-presets-col">
-              <span className="route-presets-label">Scenarios</span>
+              <span className="route-presets-label">{dict.presetsScenariosLabel}</span>
               <div className="gis-quick">
                 {SCENARIOS.map((s) => (
                   <button
@@ -377,7 +384,7 @@ export default function CitizenRoutingPage() {
                     className="chip"
                     onClick={() => handleScenario(s.issue, s.point)}
                   >
-                    {s.label}
+                    {dict.scenarios[s.label] ?? s.label}
                   </button>
                 ))}
               </div>
@@ -389,7 +396,7 @@ export default function CitizenRoutingPage() {
       <section className="route-step">
         <div className="route-step-head">
           <span className="route-step-no">2</span>
-          <h2>Pin the location</h2>
+          <h2>{dict.stepPinLocation}</h2>
         </div>
 
         <div className="routing-location-row">
@@ -398,20 +405,20 @@ export default function CitizenRoutingPage() {
             className="btn btn-primary btn-lg routing-gps-btn"
             onClick={applyGps}
             disabled={geo.status === "requesting" || !isGeolocationSupported()}
-            aria-label="Use my current location"
+            aria-label={dict.gpsIdle}
           >
-            {geo.status === "requesting" ? "Getting your location…" : "Use My Current Location"}
+            {geo.status === "requesting" ? dict.gpsRequesting : dict.gpsIdle}
           </button>
         </div>
 
         <div className="location-panel" aria-live="polite">
-          {geo.status === "requesting" && <p className="location-status">Getting your location…</p>}
+          {geo.status === "requesting" && <p className="location-status">{dict.gpsRequesting}</p>}
           {geo.error && geo.status !== "requesting" && geo.status !== "success" && (
             <div className="location-error">
               <p>{geo.error}</p>
               {isGeolocationSupported() && (
                 <button type="button" className="btn btn-outline btn-sm" onClick={applyGps}>
-                  Try again
+                  {dict.tryAgain}
                 </button>
               )}
             </div>
@@ -419,24 +426,19 @@ export default function CitizenRoutingPage() {
           {selectedLocation && geo.status !== "requesting" && !geo.error && (
             <p className="location-status">
               <span className="location-source">
-                Location from {locationSourceLabel(selectedLocation.source)}
+                {fill(dict.locationFrom, { source: locationSourceLabel(selectedLocation.source, dict) })}
               </span>
               : {selectedLocation.latitude.toFixed(5)}, {selectedLocation.longitude.toFixed(5)}
               {selectedLocation.accuracy != null
-                ? ` · accuracy ±${Math.round(selectedLocation.accuracy)} m`
+                ? ` ${fill(dict.accuracyTemplate, { accuracy: Math.round(selectedLocation.accuracy) })}`
                 : ""}
             </p>
           )}
           {gpsOutside && selectedLocation?.source === "gps" && (
-            <p className="location-outside">
-              Your current location is outside the supported Mysuru civic dataset. The point is
-              still valid — routing will report that no supported jurisdiction covers it.
-            </p>
+            <p className="location-outside">{dict.gpsOutside}</p>
           )}
           {!selectedLocation && geo.status !== "requesting" && !geo.error && (
-            <p className="muted">
-              Tap the map below, or use your current location.
-            </p>
+            <p className="muted">{dict.emptyLocationHint}</p>
           )}
         </div>
 
@@ -454,16 +456,16 @@ export default function CitizenRoutingPage() {
           />
           <p className="muted gis-click-hint">
             {issueType
-              ? `Click any street or location on the map to route "${issueType}" on ${onDate}.`
-              : "Select an issue type first, then click a location on the map."}
+              ? fill(dict.mapHintRoute, { issueType, onDate })
+              : dict.mapHintChooseIssue}
           </p>
         </div>
 
         <details className="manual-coords">
-          <summary>Enter coordinates manually</summary>
+          <summary>{dict.manualSummary}</summary>
           <div className="manual-coords-grid">
             <div className="field">
-              <label htmlFor="manual-lat">Latitude</label>
+              <label htmlFor="manual-lat">{dict.latitude}</label>
               <input
                 id="manual-lat"
                 type="number"
@@ -476,7 +478,7 @@ export default function CitizenRoutingPage() {
               />
             </div>
             <div className="field">
-              <label htmlFor="manual-lng">Longitude</label>
+              <label htmlFor="manual-lng">{dict.longitude}</label>
               <input
                 id="manual-lng"
                 type="number"
@@ -489,14 +491,11 @@ export default function CitizenRoutingPage() {
               />
             </div>
             <button type="button" className="btn btn-outline manual-set-btn" onClick={applyManual}>
-              Set location
+              {dict.setLocation}
             </button>
           </div>
           {manualError && <p className="error-text">{manualError}</p>}
-          <p className="muted">
-            Use coordinates you read from the map or a GPS device. The point must be inside the
-            networked city area shown on the map.
-          </p>
+          <p className="muted">{dict.manualHint}</p>
         </details>
 
         <div className="routing-resolve-row route-resolve-row">
@@ -509,13 +508,11 @@ export default function CitizenRoutingPage() {
               runResolve(selectedLocation.latitude, selectedLocation.longitude, issueType, onDate);
             }}
           >
-            {resolving ? "Resolving responsibility…" : "Resolve Responsibility"}
+            {resolving ? dict.resolveBusy : dict.resolveIdle}
           </button>
           {(!selectedLocation || !issueType) && (
             <p className="muted routing-resolve-hint">
-              {!issueType
-                ? "Select an issue type above first."
-                : "Choose a location to enable routing."}
+              {!issueType ? dict.resolveHintNoIssue : dict.resolveHintNoLocation}
             </p>
           )}
         </div>
@@ -524,33 +521,31 @@ export default function CitizenRoutingPage() {
       <section className="route-step route-result-step" aria-live="polite">
         <div className="route-step-head">
           <span className="route-step-no">3</span>
-          <h2>The responsible authority</h2>
+          <h2>{dict.stepResponsible}</h2>
         </div>
-        {resolving && <p className="muted">Resolving responsibility…</p>}
+        {resolving && <p className="muted">{dict.resolveBusy}</p>}
         {resultError && <p className="error-text">{resultError}</p>}
         {!resolving && !resultError && !result && (
-          <p className="muted route-result-empty">
-            No result yet — describe the issue, pin a location, then press Resolve.
-          </p>
+          <p className="muted route-result-empty">{dict.resultEmpty}</p>
         )}
         {!resolving && !resultError && result && (
           <div className="route-result-card">
-            <RoutingResultView result={result} />
-            <RoutingExplanation result={result} />
+            <RoutingResultView result={result} dict={dict} />
+            <RoutingExplanation result={result} dict={dict} />
             <details className="route-extra">
-              <summary>Explore further</summary>
+              <summary>{dict.routeExtraSummary}</summary>
               <div className="replay-links">
                 <Link
                   className="btn btn-outline"
                   to={`/replay?lat=${result.latitude}&lng=${result.longitude}&issue=${encodeURIComponent(result.issue_type)}&start=2023-01-01&end=2025-01-01`}
                 >
-                  Explore this location historically →
+                  {dict.replayLink}
                 </Link>
                 <Link
                   className="btn btn-outline"
                   to={`/history?lat=${result.latitude}&lng=${result.longitude}`}
                 >
-                  Open in Historical Explorer
+                  {dict.historyLink}
                 </Link>
               </div>
             </details>
@@ -559,18 +554,18 @@ export default function CitizenRoutingPage() {
       </section>
 
       <details className="route-advanced">
-        <summary>Engine details · graph &amp; decision rules</summary>
+        <summary>{dict.advancedSummary}</summary>
         {graphError && <p className="error-text">{graphError}</p>}
         {graph && (
           <div className="card resp-graph-card">
             <div className="resp-graph-head">
-              <h3>Why this route? · Responsibility Graph</h3>
+              <h3>{dict.advancedWhyRoute}</h3>
               {graph.routing_id !== null && (
-                <span className="muted">Routing audit #{graph.routing_id}</span>
+                <span className="muted">{fill(dict.auditRouting, { id: graph.routing_id })}</span>
               )}
             </div>
             <p className="resp-graph-status">
-              Routing status:{" "}
+              {dict.routingStatus}{" "}
               <span
                 className={`result-status ${
                   (STATUS_TONE as Record<string, string>)[graph.status] ?? "muted-tag"
@@ -586,17 +581,18 @@ export default function CitizenRoutingPage() {
 
         {rules.length > 0 && (
           <div className="card rules-card">
-            <h3>Decision table · {rules.length} rule{rules.length === 1 ? "" : "s"} in force for{" "}
-              <code>{issueType}</code> on <code>{onDate}</code></h3>
+            <h3>
+              {fill(dict.rulesCount, { count: rules.length, issue: issueType, date: onDate })}
+            </h3>
             <div className="table-scroll rules-table-wrap">
               <table className="rules-table">
               <thead>
                 <tr>
-                  <th>Rule</th>
-                  <th>Scope</th>
-                  <th>Prio</th>
-                  <th>In force</th>
-                  <th>Authority → Service</th>
+                  <th>{dict.tableRule}</th>
+                  <th>{dict.tableScope}</th>
+                  <th>{dict.tablePrio}</th>
+                  <th>{dict.tableInForce}</th>
+                  <th>{dict.tableAuthorityService}</th>
                 </tr>
               </thead>
               <tbody>
@@ -626,13 +622,13 @@ export default function CitizenRoutingPage() {
   );
 }
 
-function locationSourceLabel(source: SelectedLocation["source"]): string {
-  if (source === "gps") return "your current location";
-  if (source === "map") return "the map";
-  return "manual entry";
+function locationSourceLabel(source: SelectedLocation["source"], dict: Dict): string {
+  if (source === "gps") return dict.sourceGps;
+  if (source === "map") return dict.sourceMap;
+  return dict.sourceManual;
 }
 
-function RoutingResultView({ result }: { result: RoutingResult }) {
+function RoutingResultView({ result, dict }: { result: RoutingResult; dict: Dict }) {
   return (
     <div className="gis-result">
       <div className="module-head">
@@ -641,29 +637,28 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
 
       {result.status === "NO_JURISDICTION" && (
         <div className="no-jurisdiction-note" role="status">
-          No supported civic jurisdiction covers this location on the selected date. Try a point
-          inside a Mysuru ward on the map above.
+          {dict.resultNoJurisdiction}
         </div>
       )}
 
       <dl className="kv">
         <div>
-          <dt>Point</dt>
+          <dt>{dict.resultPoint}</dt>
           <dd>
             {result.latitude.toFixed(5)}, {result.longitude.toFixed(5)}
           </dd>
         </div>
         <div>
-          <dt>Issue</dt>
+          <dt>{dict.resultIssue}</dt>
           <dd>{result.issue_type}</dd>
         </div>
         <div>
-          <dt>Date</dt>
+          <dt>{dict.resultDate}</dt>
           <dd>{result.effective_date}</dd>
         </div>
         {result.jurisdiction_code && (
           <div>
-            <dt>Jurisdiction</dt>
+            <dt>{dict.resultJurisdiction}</dt>
             <dd>
               {result.jurisdiction_code} · {result.jurisdiction_kind ?? "?"}
             </dd>
@@ -671,7 +666,7 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
         )}
         {result.ward_code && (
           <div>
-            <dt>Ward</dt>
+            <dt>{dict.resultWard}</dt>
             <dd>
               {result.ward_code} · {result.ward_name ?? ""}
             </dd>
@@ -679,7 +674,7 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
         )}
         {result.version_code && (
           <div>
-            <dt>Version</dt>
+            <dt>{dict.resultVersion}</dt>
             <dd>{result.version_code}</dd>
           </div>
         )}
@@ -688,28 +683,28 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
       {result.status === "RESOLVED" && result.authority && result.department && result.service && (
         <>
           <div className="actor-chain">
-            <DirectorActor label="Authority" actor={result.authority} />
+            <DirectorActor label={dict.actorAuthority} actor={result.authority} />
             <span className="actor-arrow">→</span>
-            <DirectorActor label="Department" actor={result.department} />
+            <DirectorActor label={dict.actorDepartment} actor={result.department} />
             <span className="actor-arrow">→</span>
-            <DirectorActor label="Service" actor={result.service} />
+            <DirectorActor label={dict.actorService} actor={result.service} />
           </div>
           <dl className="kv">
             {result.matched_scope && (
               <div>
-                <dt>Matched scope</dt>
+                <dt>{dict.resultMatchedScope}</dt>
                 <dd>{result.matched_scope}</dd>
               </div>
             )}
             {result.sla_days !== null && (
               <div>
-                <dt>SLA</dt>
-                <dd>{result.sla_days} days</dd>
+                <dt>{dict.resultSla}</dt>
+                <dd>{result.sla_days} {dict.slaUnit}</dd>
               </div>
             )}
             {result.routing_rule_code && (
               <div>
-                <dt>Rule</dt>
+                <dt>{dict.resultRule}</dt>
                 <dd>
                   <code>{result.routing_rule_code}</code>
                 </dd>
@@ -718,7 +713,7 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
           </dl>
           {result.escalation_path.length > 0 && (
             <div className="escalation">
-              <h4>Escalation path</h4>
+              <h4>{dict.resultEscalationPath}</h4>
               {result.escalation_path.map((step) => (
                 <div key={step.step_number} className="escalation-step">
                   <span className="escalation-step-no">#{step.step_number}</span>
@@ -733,10 +728,8 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
 
       {result.status === "RESPONSIBILITY_UNRESOLVED" && result.conflict_rule_codes.length > 0 && (
         <div className="conflict-box">
-          <h4>Responsibility conflict</h4>
-          <p>
-            Two equal-priority rules both matched and disagree on ownership:
-          </p>
+          <h4>{dict.resultConflictTitle}</h4>
+          <p>{dict.resultConflictBody}</p>
           <ul className="conflict-list">
             {result.conflict_rule_codes.map((code) => (
               <li key={code}>
@@ -744,14 +737,14 @@ function RoutingResultView({ result }: { result: RoutingResult }) {
               </li>
             ))}
           </ul>
-          <p className="muted">An authority must break the tie before the issue can be routed.</p>
+          <p className="muted">{dict.resultConflictNote}</p>
         </div>
       )}
 
       {result.explanation && <p className="why-route">{result.explanation}</p>}
       {result.reason && <p className="muted">{result.reason}</p>}
       {result.audit_id !== null && (
-        <p className="muted">Audit: routing.resolve #{result.audit_id}</p>
+        <p className="muted">{fill(dict.resultAudit, { id: result.audit_id })}</p>
       )}
     </div>
   );

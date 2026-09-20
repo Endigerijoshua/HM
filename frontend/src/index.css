@@ -2540,6 +2540,44 @@ letter-spacing: 0.05em;
   color: #ffffff;
 }
 
+.lang-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.lang-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lang-toggle-btn:hover {
+  color: var(--ink);
+}
+
+.lang-toggle-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.citizen-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .content > .view-toggle {
   margin: 0 0 20px;
 }
@@ -2603,6 +2641,14 @@ letter-spacing: 0.05em;
 
   .citizen-content {
     padding: 26px 16px 48px;
+  }
+
+  .citizen-bar-actions {
+    justify-content: flex-end;
+  }
+
+  .lang-toggle {
+    margin-left: auto;
   }
 }
 
