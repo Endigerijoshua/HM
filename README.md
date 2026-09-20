@@ -159,8 +159,11 @@ http://localhost:8000.
 
 | Name | Role | GitHub |
 |---|---|---|
-| `Omkar` ⚠️ confirm | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
-| `<name>` | `<role>` | `@<handle>` |
+| `Omkar` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
+| `Joshua` | `<frontend + UI/UX /supreme leader of india>` | `@Endigeri` |
+| `Deeksha` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
+| `Trupti` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
+
 
 ## License
 
