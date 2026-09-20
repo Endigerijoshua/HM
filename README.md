@@ -161,7 +161,7 @@ http://localhost:8000.
 |---|---|---|
 | `Omkar` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
 | `Joshua` | `<frontend + UI/UX /supreme leader of india>` | `@Endigeri` |
-| `Deeksha` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
+| `Deeksha` | `<backend + routing engine / team lead>` | `@deekshaaganiger` |
 | `Trupti` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
 
 
