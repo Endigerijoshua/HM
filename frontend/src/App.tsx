@@ -27,7 +27,7 @@ function AppRoutes() {
           <div className="citizen-brand">
             <div className="brand-mark" />
             <div>
-              <div className="brand-title">TCDT</div>
+              <div className="brand-title">{dict.brandTitle}</div>
               <div className="brand-sub">{dict.brandSub}</div>
             </div>
           </div>

@@ -52,8 +52,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="brand">
         <div className="brand-mark" />
         <div>
-          <div className="brand-title">TCDT</div>
-          <div className="brand-sub">Civic Jurisdiction Digital Twin</div>
+          <div className="brand-title">JanSetu</div>
+          <div className="brand-sub">Temporal Civic Jurisdiction Digital Twin (TCJDT)</div>
         </div>
       </div>
 

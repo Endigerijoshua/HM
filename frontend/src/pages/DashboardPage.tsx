@@ -86,7 +86,7 @@ export default function DashboardPage() {
   return (
     <section className="page">
       <header className="page-header dashboard-hero">
-        <h1 className="hero-title">Temporal Civic Jurisdiction Digital Twin</h1>
+        <h1 className="hero-title">JanSetu · Temporal Civic Jurisdiction Digital Twin</h1>
         <p className="hero-subtitle">
           Determine who is responsible for a civic issue when jurisdiction boundaries change
           over time.

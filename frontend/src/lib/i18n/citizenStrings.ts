@@ -33,6 +33,7 @@ export function fill(
 }
 
 export interface Dict {
+  brandTitle: string;
   brandSub: string;
   pageTitle: string;
   pageSubtitle: string;
@@ -129,7 +130,8 @@ export interface Dict {
 }
 
 const en: Dict = {
-  brandSub: "Civic Jurisdiction Digital Twin",
+  brandTitle: "JanSetu",
+  brandSub: "Temporal Civic Jurisdiction Digital Twin (TCJDT)",
 
   pageTitle: "Citizen Routing",
   pageSubtitle:
@@ -326,7 +328,8 @@ const en: Dict = {
 };
 
 const kn: Dict = {
-  brandSub: "ನಾಗರಿಕ ವ್ಯಾಪ್ತಿ ಡಿಜಿಟಲ್ ಟ್ವಿನ್",
+  brandTitle: "ಜನಸೇತು",
+  brandSub: "ತಾತ್ಕಾಲಿಕ ನಾಗರಿಕ ವ್ಯಾಪ್ತಿ ಡಿಜಿಟಲ್ ಟ್ವಿನ್ (TCJDT)",
 
   pageTitle: "ನಾಗರಿಕ ಸೇವಾ ಮಾರ್ಗದರ್ಶನ",
   pageSubtitle:
