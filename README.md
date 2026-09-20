@@ -14,8 +14,7 @@
 ## Submission Artifacts
 - Live MVP: https://hm-gamma-kohl.vercel.app
 - Video Walkthrough: https://drive.google.com/file/d/1EGtA6KJ2rag01VlUJghjXgR1fZahGQUH/view?usp=sharing
-- Presentation Deck: https://docs.google.com/presentation/d/1GgbVJfEJWU5S6vuMREiHU3TK6be8TptL29FuGKa0Bbo/edit?usp=sharing
-
+- Presentation Deck: (https://drive.google.com/file/d/1ZGtSTBU7Mu-M2SnST7w2OibTzoCrfRPe/view?usp=sharing)
 ## 1. Problem Understanding
 
 **Chosen sub-problem:** Routing
