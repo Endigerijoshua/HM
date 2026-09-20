@@ -1,4 +1,4 @@
-# Temporal Civic Jurisdiction Digital Twin — "who is responsible here, right now?"
+# JanaSetu — "who is responsible here, right now?"
 
 > HackMysuru 1.0 · Phase 1 · Civic Governance & Clean Mysuru
 > Team `<Team Name>` (`<Team ID>`)
