@@ -159,10 +159,10 @@ http://localhost:8000.
 
 | Name | Role | GitHub |
 |---|---|---|
-| `Omkar` | `<backend + routing engine / team lead>` | `@omkarshirol4-cloud` |
-| `Joshua` | `<frontend + UI/UX /supreme leader of india>` | `@Endigeri` |
-| `Deeksha` | `<demo voiceovers + miscellanous/ disabled>` | `@deekshaaganiger` |
-| `Trupti` | `<presentation + miscellanous + overeating>` | `@truptiiliger` |
+| `Omkar` | `<backend + routing engine / team lead>` | `@omkarshirol4` |
+| `Joshua` | `<frontend + UI/UX>` | `@Endigerijoshua` |
+| `Deeksha` | `<demo voiceovers + miscellanous/ team lead>` | `@deekshaaganiger` |
+| `Trupti` | `<presentation + miscellanous>` | `@truptiiliger` |
 
 
 ## License
